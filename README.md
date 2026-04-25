@@ -1,4 +1,4 @@
-# 📦 Baktime
+![Baktime - database backups, scheduled on github](assets/baktime-banner.png)
 
 > **The "Upptime" for Database Backups.** > Orchestrate multiple MySQL & PostgreSQL backups to S3/R2 using GitHub Actions.
 
