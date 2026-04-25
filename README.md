@@ -80,4 +80,3 @@ Your status page is automatically generated and hosted on GitHub Pages. It visua
 
 ---
 *Inspired by the architecture of Upptime. Built for reliability and simplicity.*
-```
