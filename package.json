@@ -1,0 +1,34 @@
+{
+  "name": "baktime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Upptime for backups — MySQL/Postgres and remote-file backups orchestrated by GitHub Actions, using restic and a Cloudflare Worker scheduler.",
+  "type": "module",
+  "workspaces": [
+    "cloudflare-worker"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "cron-parser": "^5.0.4",
+    "js-yaml": "^4.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.14.0",
+    "eslint": "^9.13.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.13.0",
+    "vitest": "^2.1.4"
+  }
+}
