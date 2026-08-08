@@ -38,6 +38,8 @@ defaults:
 
 knownTargets: [] # optional, docs/lint only — see below
 
+secrets: [] # optional, docs/lint only — bare notification secret names, see docs/secrets.md
+
 statusSite:
   name: My Backups
   baseUrl: /
@@ -54,7 +56,15 @@ statusSite:
 | `restic.accessKeyIdSecretName` / `secretAccessKeySecretName` | only for `r2`/`s3` | **Names** of GitHub secrets holding the actual S3-style credential values — never the values themselves. Omit for `local`/`custom` unless that backend actually needs them. |
 | `defaults.retention` | no | Falls back to restic's own defaults (effectively "keep everything") if omitted entirely. Every field is a plain [restic `forget`](https://restic.readthedocs.io/en/stable/060_forget.html) policy field; unset fields aren't passed to restic. Only used by the Phase 3 `prune.yml` — see `ROADMAP.md`. |
 | `knownTargets` | no | Bare, lowercase-kebab target names, for human documentation and CI linting only. Discovery never depends on this list being present or accurate. |
+| `secrets` | no | Bare GitHub secret names (e.g. `NOTIFICATION_DISCORD`), for documentation only — same field name and purpose as upptime's own `secrets:` allowlist. See [secrets.md](./secrets.md#notifications). |
 | `statusSite.*` | no | Only used once the Phase 3 status site exists — see `ROADMAP.md`. |
+
+## Notifications (via secrets, not here)
+
+Like targets, notification channels are never configured in
+`.baktimerc.yml` — see [secrets.md](./secrets.md#notifications) for the
+`NOTIFICATION_<PROVIDER>`/`NOTIFICATION_<PROVIDER>_<SETTING>` convention
+(identical to upptime's own).
 
 ### Local storage backend
 

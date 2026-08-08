@@ -36,6 +36,26 @@ describe("BaktimeConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts an upptime-style `secrets:` allowlist of notification secret names", () => {
+    const result = BaktimeConfigSchema.safeParse({
+      owner: "mleczakm",
+      repo: "backup",
+      restic: validResticConfig,
+      secrets: ["NOTIFICATION_DISCORD", "NOTIFICATION_DISCORD_WEBHOOK_URL"],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a `secrets:` entry that isn't a valid GitHub secret name", () => {
+    const result = BaktimeConfigSchema.safeParse({
+      owner: "mleczakm",
+      repo: "backup",
+      restic: validResticConfig,
+      secrets: ["not a valid secret name"],
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects a config with a literal `targets` array (dynamic-from-secrets only)", () => {
     const result = BaktimeConfigSchema.safeParse({
       owner: "mleczakm",

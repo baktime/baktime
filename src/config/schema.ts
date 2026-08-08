@@ -177,6 +177,13 @@ export const BaktimeConfigSchema = z
       .optional(),
     /** Bare target names, for docs/CI-lint only — never authoritative for discovery. */
     knownTargets: z.array(TargetNameSchema).optional(),
+    /**
+     * Same field name and purpose as upptime's own `secrets:` allowlist:
+     * bare GitHub secret *names* (e.g. "NOTIFICATION_DISCORD",
+     * "NOTIFICATION_DISCORD_WEBHOOK_URL") for documentation only — never
+     * authoritative, never a value. See docs/secrets.md.
+     */
+    secrets: z.array(SecretNameSchema).optional(),
     statusSite: StatusSiteConfigSchema.optional(),
   })
   .strict();

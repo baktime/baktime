@@ -5,7 +5,9 @@ cron-based scheduling, the full `files`-target backup path
 (self-bootstrapping remote restic over SSH), the full `mysql`/`postgres`
 backup path (direct or SSH-tunnel connection, dump streamed straight into
 `restic backup --stdin` on the runner), a local-filesystem restic backend
-option (files targets only), history, the
+option (files targets only), history, Discord backup success/failure
+notifications (secrets-driven, upptime-style config — see
+`docs/secrets.md#notifications`), the
 `backup.yml`/`sync-cloudflare-schedule.yml`/`ci.yml`/`deploy-cloudflare-worker.yml`
 workflows, and the schedule-aware Cloudflare Worker. See
 `docs/architecture.md` for how it all fits together.
@@ -59,6 +61,18 @@ across restarts, KV eventual-consistency edge cases, and Worker redeploys.
   failure gets a distinct label from a backup failure, since a failed
   restore drill alongside succeeding backups is a more urgent signal (data
   may be silently unrestorable).
+
+## Additional notification providers
+
+`src/notifications/dispatch.ts`'s `discoverNotificationChannels` is
+designed for this: each provider is a self-contained block reading its own
+`NOTIFICATION_<PROVIDER>*` secrets and pushing a `NotificationChannel`.
+Candidates, in likely order of usefulness: Slack (webhook, same shape as
+Discord's), email (would need an SMTP or transactional-email-API secret
+set), and a generic webhook/Apprise-style catch-all for anything else.
+`summary.yml`'s incident issues (Phase 5) are a separate, complementary
+signal (durable, threaded per-incident) rather than a provider to fold in
+here.
 
 ## Phase 6 — Integration test harness
 

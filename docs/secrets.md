@@ -70,6 +70,37 @@ Delete the `BAKTIME_TARGET_<NAME>` secret (and its satellites, if unused
 elsewhere). Its existing `history/<name>.yml` and restic snapshots aren't
 touched — deleting the secret only stops future backups.
 
+## Notifications
+
+Configured exactly the same way upptime configures its own notification
+channels — nothing in `.baktimerc.yml` beyond the optional, non-authoritative
+`secrets:` documentation list. A provider is:
+
+1. **Enabled** via a `NOTIFICATION_<PROVIDER>` secret set to the literal
+   string `"true"` (or `"1"`).
+2. **Configured** via `NOTIFICATION_<PROVIDER>_<SETTING>` secrets.
+
+### Discord
+
+| Secret name | Required | Value |
+|---|---|---|
+| `NOTIFICATION_DISCORD` | yes | `"true"` |
+| `NOTIFICATION_DISCORD_WEBHOOK_URL` | yes | A Discord webhook URL — create one in your server under *Channel Settings → Integrations → Webhooks*. |
+
+Sends a color-coded embed on every backup attempt: green with the snapshot
+id and data size on success, red with the error message on failure (see
+`src/notifications/discord.ts`). If `NOTIFICATION_DISCORD` is `"true"` but
+the webhook URL secret is missing, baktime logs a clear warning and skips
+Discord rather than failing the backup itself — a notification channel
+being unreachable must never be mistaken for the backup having failed.
+
+### Future providers
+
+`src/notifications/dispatch.ts`'s `discoverNotificationChannels` is where
+each provider registers itself — adding Slack, email, or anything else
+later is additive (read its own `NOTIFICATION_<PROVIDER>*` secrets, push a
+channel), not a redesign. See `ROADMAP.md`.
+
 ## Why the whole secrets context is passed as one JSON blob
 
 Every workflow step that needs to discover targets sets

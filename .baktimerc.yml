@@ -38,6 +38,14 @@ defaults:
 # or without this list.
 knownTargets: []
 
+# Optional — same field name/purpose as upptime's own `secrets:` allowlist:
+# names (never values) of notification secrets in use, for documentation
+# only. Notifications are enabled/configured entirely via secrets, exactly
+# like targets — see docs/secrets.md.
+# secrets:
+#   - NOTIFICATION_DISCORD
+#   - NOTIFICATION_DISCORD_WEBHOOK_URL
+
 statusSite:
   name: My Backups
   theme: auto
