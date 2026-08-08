@@ -103,7 +103,10 @@ export async function backupDatabaseTarget(
       {
         command: localResticPath,
         args: resticArgs,
-        env: { PATH: process.env.PATH, ...resticEnv },
+        // HOME is required for restic to locate its local cache directory —
+        // `restic backup` fails fast with "unable to open cache" without it
+        // (see restic/client.ts's runLocalRestic for the same requirement).
+        env: { PATH: process.env.PATH, HOME: process.env.HOME, ...resticEnv },
       },
     );
 

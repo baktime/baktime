@@ -144,6 +144,16 @@ export function spawnPipeline(
     consumerProc.on("close", (code) => {
       if (settled) return;
       settled = true;
+      // Symmetric to the producer's close handler above: if the consumer
+      // exits (especially early/fast, e.g. it fails validation before
+      // reading any input) while the producer is still running, nothing
+      // else stops it. An un-killed child process keeps this whole Node
+      // process alive indefinitely — which hangs the calling GitHub Actions
+      // job well past any expected duration, since a set `process.exitCode`
+      // alone doesn't force an exit while a child process handle is open.
+      if (producerProc.exitCode === null && !producerProc.killed) {
+        producerProc.kill();
+      }
       if (producerFailure) {
         reject(producerFailure);
         return;

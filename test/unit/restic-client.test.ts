@@ -102,7 +102,10 @@ describe("ensureRepositoryInitialized", () => {
     expect(execFileMock).toHaveBeenCalledWith(
       "restic",
       expect.arrayContaining(["snapshots"]),
-      { env },
+      // HOME must be present — restic's `backup` command fails fast with
+      // "unable to open cache" without a locatable cache directory (a real
+      // production incident this test guards against regressing).
+      { env: expect.objectContaining({ ...env, HOME: process.env.HOME }) },
     );
   });
 
@@ -114,7 +117,9 @@ describe("ensureRepositoryInitialized", () => {
 
     expect(result).toBe("initialized");
     expect(execFileMock).toHaveBeenCalledTimes(2);
-    expect(execFileMock).toHaveBeenNthCalledWith(2, "restic", ["init", "--json"], { env });
+    expect(execFileMock).toHaveBeenNthCalledWith(2, "restic", ["init", "--json"], {
+      env: expect.objectContaining({ ...env, HOME: process.env.HOME }),
+    });
   });
 });
 

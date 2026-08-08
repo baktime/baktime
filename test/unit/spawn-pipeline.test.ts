@@ -1,3 +1,6 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ExecError, spawnPipeline } from "../../src/util/exec.js";
 
@@ -46,5 +49,38 @@ describe("spawnPipeline", () => {
   it("resolves with an empty stdout when the producer emits nothing", async () => {
     const result = await spawnPipeline({ command: "true", args: [] }, { command: "cat", args: [] });
     expect(result.stdout).toBe("");
+  });
+
+  it("kills a still-running producer when the consumer exits early (regression: this used to hang the whole process)", async () => {
+    // Reproduces a real production incident: restic (the consumer) failed
+    // fast with a startup error while pg_dump (the producer) was still
+    // running. Without killing the producer, its still-open child-process
+    // handle kept the whole Node process alive well past the promise
+    // settling, hanging the calling GitHub Actions job indefinitely.
+    const dir = await mkdtemp(join(tmpdir(), "baktime-spawn-pipeline-"));
+    const pidFile = join(dir, "producer.pid");
+
+    const start = Date.now();
+    await expect(
+      spawnPipeline(
+        // A long-running "producer" that would still be alive long after
+        // the consumer below has already failed and exited.
+        { command: "sh", args: ["-c", `echo $$ > '${pidFile}'; sleep 30`] },
+        // Simulates restic's fast "unable to open cache" startup failure.
+        { command: "sh", args: ["-c", "exit 1"] },
+      ),
+    ).rejects.toThrow(ExecError);
+    const elapsedMs = Date.now() - start;
+
+    // The whole point: this resolves promptly, not after the producer's 30s sleep.
+    expect(elapsedMs).toBeLessThan(5000);
+
+    // Give the kill signal a moment to actually land, then confirm the
+    // producer process is really gone, not just detached/orphaned.
+    await new Promise((r) => setTimeout(r, 200));
+    const pid = Number((await readFile(pidFile, "utf8")).trim());
+    expect(() => process.kill(pid, 0)).toThrow(); // ESRCH once the process no longer exists
+
+    await rm(dir, { recursive: true, force: true });
   });
 });

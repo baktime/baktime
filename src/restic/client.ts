@@ -61,9 +61,16 @@ export function buildBackupStdinArgs(options: BackupStdinArgsOptions): string[] 
  * `"restic"` (resolved via PATH) but callers should normally pass the path
  * resolved by `restic/bootstrap-local.ts`'s `ensureLocalResticInstalled`,
  * since restic isn't preinstalled on GitHub-hosted runners.
+ *
+ * `HOME` (or `XDG_CACHE_HOME`) must be present in the child's environment —
+ * restic hard-requires a writable cache directory for `backup` specifically
+ * (though not, it turns out, for `snapshots`/`init`) and fails fast with
+ * "unable to open cache" without one. Since passing an explicit `env` to
+ * `execFile` replaces the environment rather than extending it, this has to
+ * be threaded through deliberately rather than relying on inheritance.
  */
 export async function runLocalRestic(args: readonly string[], env: ResticEnv, resticPath = "restic") {
-  return execFile(resticPath, args, { env });
+  return execFile(resticPath, args, { env: { HOME: process.env.HOME, PATH: process.env.PATH, ...env } });
 }
 
 /**
