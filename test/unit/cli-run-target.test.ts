@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const loadConfigMock = vi.fn();
 vi.mock("../../src/config/load.js", () => ({
@@ -35,6 +35,13 @@ const appendRecordMock = vi.fn();
 vi.mock("../../src/history/writer.js", () => ({
   getLastRunAt: (...args: unknown[]) => getLastRunAtMock(...args),
   appendRecord: (...args: unknown[]) => appendRecordMock(...args),
+}));
+
+const discoverNotificationChannelsMock = vi.fn();
+const notifyAllMock = vi.fn();
+vi.mock("../../src/notifications/dispatch.js", () => ({
+  discoverNotificationChannels: (...args: unknown[]) => discoverNotificationChannelsMock(...args),
+  notifyAll: (...args: unknown[]) => notifyAllMock(...args),
 }));
 
 const { runTarget } = await import("../../src/cli/run-target.js");
@@ -78,6 +85,13 @@ afterEach(() => {
   backupPostgresTargetMock.mockReset();
   getLastRunAtMock.mockReset();
   appendRecordMock.mockReset();
+  discoverNotificationChannelsMock.mockReset();
+  notifyAllMock.mockReset();
+});
+
+beforeEach(() => {
+  discoverNotificationChannelsMock.mockReturnValue([]);
+  notifyAllMock.mockResolvedValue(undefined);
 });
 
 const localBootstrapResult = {
@@ -108,6 +122,9 @@ describe("runTarget", () => {
     );
     expect(backupFilesTargetMock).toHaveBeenCalledTimes(1);
     expect(appendRecordMock).toHaveBeenCalledTimes(1);
+    expect(notifyAllMock).toHaveBeenCalledTimes(1);
+    const [, notifiedRecord] = notifyAllMock.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(notifiedRecord).toMatchObject({ status: "success", snapshotId: "abc123" });
     const [name, record] = appendRecordMock.mock.calls[0] as [string, Record<string, unknown>];
     expect(name).toBe("webserver1");
     expect(record).toMatchObject({
@@ -129,6 +146,7 @@ describe("runTarget", () => {
 
     expect(backupFilesTargetMock).not.toHaveBeenCalled();
     expect(appendRecordMock).not.toHaveBeenCalled();
+    expect(notifyAllMock).not.toHaveBeenCalled();
   });
 
   it("runs regardless of due-ness when BAKTIME_SKIP_DUE_CHECK=true", async () => {
@@ -158,6 +176,9 @@ describe("runTarget", () => {
     expect(appendRecordMock).toHaveBeenCalledTimes(1);
     const [, record] = appendRecordMock.mock.calls[0] as [string, Record<string, unknown>];
     expect(record).toMatchObject({ status: "failure", error: "ssh: connection refused" });
+    expect(notifyAllMock).toHaveBeenCalledTimes(1);
+    const [, notifiedRecord] = notifyAllMock.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(notifiedRecord).toMatchObject({ status: "failure", error: "ssh: connection refused" });
   });
 
   it("throws a clear error for an unknown target name", async () => {

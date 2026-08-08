@@ -7,6 +7,7 @@ import type { BaktimeConfig, NamedTarget } from "../config/schema.js";
 import { SecretsStore } from "../config/secrets.js";
 import { appendRecord, getLastRunAt } from "../history/writer.js";
 import type { HistoryRecord } from "../history/types.js";
+import { discoverNotificationChannels, notifyAll } from "../notifications/dispatch.js";
 import { ensureLocalResticInstalled } from "../restic/bootstrap-local.js";
 import { ensureRepositoryInitialized } from "../restic/client.js";
 import { buildResticEnv } from "../restic/env.js";
@@ -77,6 +78,11 @@ export async function runTarget(targetName: string): Promise<void> {
   const { resticPath: localResticPath } = await ensureLocalResticInstalled();
   await ensureRepositoryInitialized(resticEnv, localResticPath);
 
+  // Discovered once up front (cheap — just a few secret lookups) and reused
+  // for whichever outcome below; a notification failure is logged, never
+  // thrown, so it can't mask the backup's own success/failure.
+  const notificationChannels = discoverNotificationChannels(secrets);
+
   try {
     const result = await runAdapter(target, secrets, config.restic, localResticPath);
     const record: HistoryRecord = {
@@ -91,6 +97,7 @@ export async function runTarget(targetName: string): Promise<void> {
     };
     appendRecord(target.name, record);
     console.log(`Backed up "${target.name}": snapshot ${result.snapshotId}, +${result.bytesAdded} bytes added`);
+    await notifyAll(notificationChannels, record);
   } catch (error) {
     const record: HistoryRecord = {
       timestamp: startedAt.toISOString(),
@@ -101,6 +108,7 @@ export async function runTarget(targetName: string): Promise<void> {
       error: error instanceof Error ? error.message : String(error),
     };
     appendRecord(target.name, record);
+    await notifyAll(notificationChannels, record);
     throw error;
   }
 }
