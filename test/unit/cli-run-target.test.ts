@@ -20,6 +20,16 @@ vi.mock("../../src/adapters/files.js", () => ({
   backupFilesTarget: (...args: unknown[]) => backupFilesTargetMock(...args),
 }));
 
+const backupMysqlTargetMock = vi.fn();
+vi.mock("../../src/adapters/mysql.js", () => ({
+  backupMysqlTarget: (...args: unknown[]) => backupMysqlTargetMock(...args),
+}));
+
+const backupPostgresTargetMock = vi.fn();
+vi.mock("../../src/adapters/postgres.js", () => ({
+  backupPostgresTarget: (...args: unknown[]) => backupPostgresTargetMock(...args),
+}));
+
 const getLastRunAtMock = vi.fn();
 const appendRecordMock = vi.fn();
 vi.mock("../../src/history/writer.js", () => ({
@@ -64,6 +74,8 @@ afterEach(() => {
   ensureRepositoryInitializedMock.mockReset();
   ensureLocalResticInstalledMock.mockReset();
   backupFilesTargetMock.mockReset();
+  backupMysqlTargetMock.mockReset();
+  backupPostgresTargetMock.mockReset();
   getLastRunAtMock.mockReset();
   appendRecordMock.mockReset();
 });
@@ -154,5 +166,43 @@ describe("runTarget", () => {
 
     await expect(runTarget("does-not-exist")).rejects.toThrow(/No valid target named/);
     expect(backupFilesTargetMock).not.toHaveBeenCalled();
+  });
+
+  it("dispatches a mysql target to the mysql adapter with the bootstrapped local restic path", async () => {
+    process.env.BAKTIME_SECRETS_JSON = JSON.stringify({
+      BAKTIME_TARGET_SHOP_DB: JSON.stringify({
+        type: "mysql",
+        database: "shop",
+        connection: { mode: "direct", host: "db.example.com", port: 3306 },
+        userSecretName: "SHOP_DB_USER",
+        passwordSecretName: "SHOP_DB_PASSWORD",
+        schedule: "*/30 * * * *",
+      }),
+      SHOP_DB_USER: "admin",
+      SHOP_DB_PASSWORD: "dbpass",
+      RESTIC_PASSWORD: "hunter2",
+      R2_ACCESS_KEY_ID: "id",
+      R2_SECRET_ACCESS_KEY: "secret",
+    });
+    loadConfigMock.mockReturnValue({ owner: "x", repo: "y", restic: resticConfig });
+    getLastRunAtMock.mockReturnValue(null);
+    ensureLocalResticInstalledMock.mockResolvedValue(localBootstrapResult);
+    ensureRepositoryInitializedMock.mockResolvedValue("already-initialized");
+    backupMysqlTargetMock.mockResolvedValue({ snapshotId: "sql1", bytesAdded: 999 });
+
+    await runTarget("shop-db");
+
+    expect(backupFilesTargetMock).not.toHaveBeenCalled();
+    expect(backupPostgresTargetMock).not.toHaveBeenCalled();
+    expect(backupMysqlTargetMock).toHaveBeenCalledTimes(1);
+    const [target, , resticCfg, resticPath] = backupMysqlTargetMock.mock.calls[0] as [
+      { name: string },
+      unknown,
+      unknown,
+      string,
+    ];
+    expect(target.name).toBe("shop-db");
+    expect(resticCfg).toBe(resticConfig);
+    expect(resticPath).toBe(localBootstrapResult.resticPath);
   });
 });

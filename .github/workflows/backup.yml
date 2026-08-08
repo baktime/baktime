@@ -32,6 +32,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Install database client tools
+        # mysqldump/pg_dump run on the runner itself for mysql/postgres
+        # targets (see docs/architecture.md) — bzip2 is also needed to
+        # unpack the locally-bootstrapped restic release. ubuntu-latest
+        # usually has these already; installing explicitly (idempotent,
+        # ~10-20s) avoids depending on exactly what a given runner image
+        # happens to ship.
+        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends default-mysql-client postgresql-client bzip2
       - name: Run target
         env:
           BAKTIME_SECRETS_JSON: ${{ toJSON(secrets) }}
@@ -88,6 +96,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Install database client tools
+        # mysqldump/pg_dump run on the runner itself for mysql/postgres
+        # targets (see docs/architecture.md) — bzip2 is also needed to
+        # unpack the locally-bootstrapped restic release. ubuntu-latest
+        # usually has these already; installing explicitly (idempotent,
+        # ~10-20s) avoids depending on exactly what a given runner image
+        # happens to ship.
+        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends default-mysql-client postgresql-client bzip2
       - name: Run target
         env:
           BAKTIME_SECRETS_JSON: ${{ toJSON(secrets) }}

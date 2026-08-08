@@ -1,4 +1,6 @@
 import { backupFilesTarget } from "../adapters/files.js";
+import { backupMysqlTarget } from "../adapters/mysql.js";
+import { backupPostgresTarget } from "../adapters/postgres.js";
 import { discoverTargets } from "../config/discover-targets.js";
 import { loadConfig } from "../config/load.js";
 import type { BaktimeConfig, NamedTarget } from "../config/schema.js";
@@ -20,13 +22,15 @@ async function runAdapter(
   target: NamedTarget,
   secrets: SecretsStore,
   resticConfig: BaktimeConfig["restic"],
+  localResticPath: string,
 ): Promise<AdapterResult> {
   switch (target.type) {
     case "files":
       return backupFilesTarget(target, secrets, resticConfig);
     case "mysql":
+      return backupMysqlTarget(target, secrets, resticConfig, localResticPath);
     case "postgres":
-      throw new Error(`"${target.type}" targets are not implemented yet (Phase 2 — see ROADMAP.md)`);
+      return backupPostgresTarget(target, secrets, resticConfig, localResticPath);
   }
 }
 
@@ -74,7 +78,7 @@ export async function runTarget(targetName: string): Promise<void> {
   await ensureRepositoryInitialized(resticEnv, localResticPath);
 
   try {
-    const result = await runAdapter(target, secrets, config.restic);
+    const result = await runAdapter(target, secrets, config.restic, localResticPath);
     const record: HistoryRecord = {
       timestamp: startedAt.toISOString(),
       target: target.name,

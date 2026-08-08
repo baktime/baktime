@@ -38,11 +38,12 @@ offer no shell access to install anything on.
 
 ## Status
 
-**Phase 1** (this release): config schema, secrets-driven dynamic target
-discovery, cron-based scheduling, a complete `files`-target backup path
-end to end, and the schedule-aware Cloudflare Worker. Database targets,
-the status site, retention/pruning, and restore verification are designed
-but not yet built — see [`ROADMAP.md`](ROADMAP.md).
+Built: config schema, secrets-driven dynamic target discovery, cron-based
+scheduling, complete `files` and `mysql`/`postgres` backup paths end to
+end, a local-filesystem restic backend option, and the schedule-aware
+Cloudflare Worker. The status site, retention/pruning, notifications, and
+restore verification are designed but not yet built — see
+[`ROADMAP.md`](ROADMAP.md).
 
 ## Getting started
 

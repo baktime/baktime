@@ -36,7 +36,7 @@ Cloudflare Worker (cron trigger, every 5 min)
 backup.yml (GitHub Actions, repository_dispatch)
   re-derives the one named target from secrets (never trusts the payload blindly)
   re-checks due-ness against history/<name>.yml (safety net against a stale KV manifest)
-  runs the target's adapter (files: SSH + remote restic; db: Phase 2)
+  runs the target's adapter (files: SSH + remote restic; mysql/postgres: dump + restic --stdin on the runner)
   → appends history/<name>.yml and commits it
 ```
 
@@ -88,15 +88,43 @@ values. This is the same trade-off restic's own docs describe for CI use;
 avoiding a *persistent* remote credentials file was the higher-priority
 property for v1.
 
-## Database backups (Phase 2 — not built yet)
+## Local storage backend
+
+`restic.backend: local` (see [config-reference.md](./config-reference.md))
+points the repository at a plain filesystem path instead of R2/S3 — useful
+for a self-hosted VPS with its own disk. It only works for `files` targets:
+restic already runs on the target host for those, so a local path is just
+a directory on that same machine, no network access needed. It doesn't
+extend to database targets — see below.
+
+## Database backups
 
 Many databases (managed RDS-style services especially) offer no shell
 access at all, so restic can't run on the database host itself the way it
-does for files. Instead the plan is: the Actions runner connects to the
-database directly (TLS) or via an SSH tunnel through a jump host, runs
-`mysqldump`/`pg_dump` locally on the runner, and streams the dump straight
-into `restic backup --stdin` against the same shared repository — no
-database-side installation required. See `ROADMAP.md`.
+does for files. Instead: the Actions runner connects to the database
+directly (TLS) or via an SSH tunnel through a jump host (`src/ssh/tunnel.ts`,
+for a database only reachable from a box you already have SSH access to),
+runs `mysqldump`/`pg_dump` **locally on the runner**, and streams the dump
+straight into `restic backup --stdin` (`src/util/exec.ts`'s `spawnPipeline`,
+connecting the two processes via Node streams, not a shell pipe or a
+buffered intermediate file) against the same shared repository — no
+database-side installation required. The database password is passed via
+`MYSQL_PWD`/`PGPASSWORD` environment variables, never a CLI argument.
+
+Because the dump runs on the ephemeral runner rather than on a host you
+control, database targets need a network-reachable restic repository
+(`r2`, `s3`, or a reachable `custom`) — a `local` repository (see the local
+storage section above) only works for `files` targets, whose restic
+process runs on the target host itself. `src/adapters/database-common.ts`
+rejects a `local` backend immediately with a clear error rather than
+failing partway through a dump.
+
+restic itself isn't preinstalled on GitHub-hosted runners either;
+`src/restic/bootstrap-local.ts` installs the same pinned, checksum-verified
+release locally (via `fetch` + `node:crypto`, no need to shell out for
+networking or hashing the way the remote/SSH bootstrap does) before any
+adapter — including the one-time repository-initialization step every run
+needs regardless of target type.
 
 ## Command safety
 
@@ -124,14 +152,17 @@ relying on a fresh instance:
 1. Point one real `files` target at a real SSH host (ideally including one
    Alpine box) and trigger `backup.yml` via `workflow_dispatch`; confirm
    `history/<name>.yml` gets a `success` record with a real snapshot id.
-2. Confirm the restic repository actually has data:
-   `restic snapshots --tag <name>` against your R2 bucket.
-3. Deploy the Cloudflare Worker, run `sync-cloudflare-schedule.yml` once
+2. Point one real `mysql` or `postgres` target at a real database — both a
+   direct connection and, if you have one, a tunnel through a jump host —
+   and confirm the same.
+3. Confirm the restic repository actually has data:
+   `restic snapshots --tag <name>` against your R2 bucket (or local path).
+4. Deploy the Cloudflare Worker, run `sync-cloudflare-schedule.yml` once
    manually, and confirm a KV `manifest` key appears
    (`wrangler kv key get manifest --binding BAKTIME_SCHEDULES --remote`).
-4. Wait for a real Worker tick to fire a `repository_dispatch` on its own
+5. Wait for a real Worker tick to fire a `repository_dispatch` on its own
    and confirm `backup.yml` runs without your intervention.
-5. Deliberately break something (wrong SSH key, unreachable host) and
-   confirm a `failure` record with a readable `error` message appears in
-   history — this is currently the only failure signal (Phase 5 adds
-   automatic GitHub Issues on top of it).
+6. Deliberately break something (wrong SSH key, unreachable host, wrong
+   database password) and confirm a `failure` record with a readable
+   `error` message appears in history — this is currently the only failure
+   signal (Phase 5 adds automatic GitHub Issues on top of it).

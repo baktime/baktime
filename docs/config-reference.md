@@ -114,7 +114,7 @@ filename, the restic `--tag`, and the workflow matrix id.
   back to `.baktimerc.yml`'s `defaults.retention`.
 - `schedule` is a standard cron expression, evaluated in UTC.
 
-### `mysql` / `postgres` targets (schema exists now; adapters are Phase 2)
+### `mysql` / `postgres` targets
 
 ```json
 {
@@ -148,11 +148,22 @@ Or, when the database is only reachable through a jump host:
 }
 ```
 
-These validate today (`npm run build && node dist/cli/lint-config.js` only
-checks `.baktimerc.yml`, but the target schema itself is exercised by
-`test/unit/config-schema.test.ts`) but running one currently fails loudly
-with `"<type>" targets are not implemented yet (Phase 2 — see ROADMAP.md)`
-— see `src/cli/run-target.ts`.
+`connection.mode: "direct"` connects straight from the GitHub Actions
+runner (TLS is available for direct MySQL connections; add your own
+`sslmode` handling for Postgres by extending `buildPgDumpArgs` if you need
+it — not included by default). `connection.mode: "tunnel"` opens an SSH
+local port-forward through `jumpHost` first (`src/ssh/tunnel.ts`), for a
+database that's only reachable from a box you already have SSH access to,
+not directly from the runner.
+
+`mysqldump`/`pg_dump` run **on the runner itself**, streaming straight into
+`restic backup --stdin` (`src/adapters/database-common.ts`) — never
+buffered whole in memory, never written to disk, and the database password
+is passed via `MYSQL_PWD`/`PGPASSWORD` environment variables, never as a
+command-line argument. This is why a `restic.backend: local` repository
+(see above) can't be used for these targets: the runner has no access to
+that filesystem. `src/cli/run-target.ts` rejects that combination
+immediately with a clear error rather than failing partway through a dump.
 
 ## How a secret becomes a target, precisely
 

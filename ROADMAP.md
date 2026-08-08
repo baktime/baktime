@@ -1,31 +1,17 @@
 # Roadmap
 
-Phase 1 (this pass) is done: `.baktimerc.yml` schema, secrets-driven dynamic
-target discovery, cron-based scheduling, the full `files`-target backup
-path (self-bootstrapping remote restic over SSH), history, the
+Done: `.baktimerc.yml` schema, secrets-driven dynamic target discovery,
+cron-based scheduling, the full `files`-target backup path
+(self-bootstrapping remote restic over SSH), the full `mysql`/`postgres`
+backup path (direct or SSH-tunnel connection, dump streamed straight into
+`restic backup --stdin` on the runner), a local-filesystem restic backend
+option (files targets only), history, the
 `backup.yml`/`sync-cloudflare-schedule.yml`/`ci.yml`/`deploy-cloudflare-worker.yml`
 workflows, and the schedule-aware Cloudflare Worker. See
 `docs/architecture.md` for how it all fits together.
 
 Everything below is designed for (schema/workflow shape already exists as
 placeholders where relevant) but not implemented.
-
-## Phase 2 — Database targets
-
-- `src/ssh/tunnel.ts`: opens a local port-forward (`ssh -L`, or `-J` for a
-  jump host) before a DB adapter runs, waits for the local port to accept
-  connections, exposes `close()`.
-- `src/adapters/mysql.ts`, `src/adapters/postgres.ts`: resolve the target's
-  `connection` (direct or tunnel), run `mysqldump`/`pg_dump` locally on the
-  runner via `spawn` (argument array, no shell), pipe stdout directly into
-  `restic backup --stdin --stdin-filename <name>-<timestamp>.sql` as a
-  second `spawn`'d process — two child processes connected by a Node
-  stream, not a shell pipe, so a large dump is never buffered in memory.
-- `src/cli/run-target.ts`'s `runAdapter` switch already has `mysql`/
-  `postgres` cases wired to throw a clear "not implemented" error — swap
-  them for real calls once the adapters exist. No schema or discovery
-  changes needed; `MysqlTarget`/`PostgresTarget` are already fully
-  validated.
 
 ## Phase 3 — History, status site, pruning
 
