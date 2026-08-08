@@ -30,17 +30,59 @@ export function assertSafeShellValue(value: string): string {
   return value;
 }
 
-/** POSIX single-quote escaping: `'` -> `'\''`, wrapped in `'...'`. */
-export function shellQuote(value: string): string {
-  assertSafeShellValue(value);
+/** Pure POSIX single-quote escaping, with no allowlist check: `'` -> `'\''`, wrapped in `'...'`. */
+export function shellQuoteRaw(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
 /**
- * Builds one remote shell command string: `command` is a fixed, internally
- * chosen program name (never attacker/config-controlled) and is emitted
- * as-is; every entry in `args` is config-derived and is always quoted.
+ * POSIX single-quote escaping for config-derived, human-authored values
+ * (paths, hostnames, versions) — rejects shell metacharacters outright
+ * first, since their presence in a path or hostname is essentially always a
+ * mistake. Do **not** use this for secret values: a legitimate high-entropy
+ * password may well contain `$`, `;`, or other "unsafe" characters, which
+ * are completely safe once single-quoted — use `shellQuoteRaw` for those.
+ */
+export function shellQuote(value: string): string {
+  assertSafeShellValue(value);
+  return shellQuoteRaw(value);
+}
+
+/**
+ * Builds one remote shell command string. Every part is quoted, including
+ * `command` — quoting a bare program name (e.g. `restic`) is a no-op for
+ * PATH lookup, so it's simplest and safest to quote uniformly rather than
+ * carve out an unquoted special case.
  */
 export function buildRemoteCommand(command: string, args: readonly string[]): string {
-  return [command, ...args.map(shellQuote)].join(" ");
+  return [command, ...args].map(shellQuote).join(" ");
+}
+
+/**
+ * Prefixes a remote command with `KEY='value' ...` environment assignments
+ * (shell env-var-prefix form), used to pass restic/db credentials into one
+ * remote invocation's environment without ever writing them to a remote
+ * file. `env` keys are always our own fixed constant names (RESTIC_PASSWORD,
+ * etc.), never config-derived, so they're interpolated as-is; values are
+ * secrets and are escaped with `shellQuoteRaw` (no allowlist — see above).
+ *
+ * Known residual risk: some hosts run command-auditing (auditd, shell
+ * "snoopy" loggers) that records the full command line a non-interactive
+ * SSH session executes, which would capture these values. This is the same
+ * trade-off restic's own docs make for CI use; a future hardening could
+ * swap this for `restic`'s `--password-command`/short-lived credential
+ * files instead. Not writing secrets to a persistent remote dotfile (the
+ * one thing this deliberately avoids) is the more important property for
+ * v1.
+ */
+export function buildRemoteCommandWithEnv(
+  env: Readonly<Record<string, string>>,
+  command: string,
+  args: readonly string[],
+): string {
+  const assignments = Object.entries(env)
+    .map(([key, value]) => `${key}=${shellQuoteRaw(value)}`)
+    .join(" ");
+  const rest = buildRemoteCommand(command, args);
+  return assignments.length > 0 ? `${assignments} ${rest}` : rest;
 }

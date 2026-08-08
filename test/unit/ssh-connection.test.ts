@@ -35,7 +35,7 @@ describe("runRemoteCommand", () => {
     expect(args).toContain("-p");
     expect(args[args.indexOf("-p") + 1]).toBe("22");
     expect(args).toContain("deploy@web1.example.com");
-    expect(args.at(-1)).toBe("restic 'backup' '/var/www'");
+    expect(args.at(-1)).toBe("'restic' 'backup' '/var/www'");
     expect(capturedKeyPath).toMatch(/baktime-ssh-.*[/\\]id$/);
   });
 
@@ -74,6 +74,15 @@ describe("runRemoteCommand", () => {
       "connection refused",
     );
     await expect(stat(keyPathDuringCall)).rejects.toThrow();
+  });
+
+  it("prefixes the remote command with env assignments when env is provided", async () => {
+    execFileMock.mockResolvedValue({ stdout: "", stderr: "" });
+    await runRemoteCommand(target, "restic", ["backup", "/var/www"], {
+      env: { RESTIC_PASSWORD: "hunter2" },
+    });
+    const [, args] = execFileMock.mock.calls[0] as [string, string[]];
+    expect(args.at(-1)).toBe("RESTIC_PASSWORD='hunter2' 'restic' 'backup' '/var/www'");
   });
 
   it("rejects an unsafe argument before ever invoking ssh", async () => {

@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile, type ExecResult } from "../util/exec.js";
-import { buildRemoteCommand } from "./shell-quote.js";
+import { buildRemoteCommand, buildRemoteCommandWithEnv } from "./shell-quote.js";
 
 export interface SshTarget {
   host: string;
@@ -45,13 +45,21 @@ async function withPrivateKeyFile<T>(
   }
 }
 
+export interface RunRemoteCommandOptions {
+  /** Environment variables (e.g. restic credentials) exported into this one remote invocation only — never written to disk. */
+  env?: Readonly<Record<string, string>>;
+}
+
 /** Runs one command on the remote host, over SSH, using a temporary key file cleaned up in a `finally`. */
 export async function runRemoteCommand(
   target: SshTarget,
   command: string,
   args: readonly string[],
+  options: RunRemoteCommandOptions = {},
 ): Promise<ExecResult> {
-  const remoteCommand = buildRemoteCommand(command, args);
+  const remoteCommand = options.env
+    ? buildRemoteCommandWithEnv(options.env, command, args)
+    : buildRemoteCommand(command, args);
   return withPrivateKeyFile(target.privateKey, (keyPath) =>
     execFile("ssh", [
       ...DEFAULT_SSH_OPTIONS,

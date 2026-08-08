@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildRemoteCommand, shellQuote, UnsafeShellValueError } from "../../src/ssh/shell-quote.js";
+import {
+  buildRemoteCommand,
+  buildRemoteCommandWithEnv,
+  shellQuote,
+  shellQuoteRaw,
+  UnsafeShellValueError,
+} from "../../src/ssh/shell-quote.js";
 
 describe("shellQuote", () => {
   it("quotes an ordinary path", () => {
@@ -38,9 +44,9 @@ describe("shellQuote", () => {
 });
 
 describe("buildRemoteCommand", () => {
-  it("joins a fixed command with quoted, config-derived arguments", () => {
+  it("quotes the command as well as every argument", () => {
     expect(buildRemoteCommand("restic", ["backup", "/var/www", "/etc/nginx"])).toBe(
-      "restic 'backup' '/var/www' '/etc/nginx'",
+      "'restic' 'backup' '/var/www' '/etc/nginx'",
     );
   });
 
@@ -55,5 +61,47 @@ describe("buildRemoteCommand", () => {
     const weirdButAllowed = "path-with-*-glob-and-(parens)";
     const quoted = shellQuote(weirdButAllowed);
     expect(quoted).toBe(`'${weirdButAllowed}'`);
+  });
+});
+
+describe("shellQuoteRaw", () => {
+  it("quotes without rejecting shell metacharacters (for secret values)", () => {
+    expect(shellQuoteRaw("p$w;`ord")).toBe("'p$w;`ord'");
+  });
+
+  it("still escapes embedded single quotes", () => {
+    expect(shellQuoteRaw("a'b")).toBe("'a'\\''b'");
+  });
+});
+
+describe("buildRemoteCommandWithEnv", () => {
+  it("prefixes the command with quoted env assignments", () => {
+    const result = buildRemoteCommandWithEnv(
+      { RESTIC_PASSWORD: "hunter2", RESTIC_REPOSITORY: "s3:https://example.com/bucket" },
+      "restic",
+      ["backup", "/var/www"],
+    );
+    expect(result).toBe(
+      "RESTIC_PASSWORD='hunter2' RESTIC_REPOSITORY='s3:https://example.com/bucket' 'restic' 'backup' '/var/www'",
+    );
+  });
+
+  it("allows secret values containing characters shellQuote would reject", () => {
+    const result = buildRemoteCommandWithEnv(
+      { RESTIC_PASSWORD: "p$w;`ord&&|" },
+      "restic",
+      ["version"],
+    );
+    expect(result).toBe("RESTIC_PASSWORD='p$w;`ord&&|' 'restic' 'version'");
+  });
+
+  it("falls back to a plain command when there are no env vars", () => {
+    expect(buildRemoteCommandWithEnv({}, "restic", ["version"])).toBe("'restic' 'version'");
+  });
+
+  it("still validates config-derived args even when env vars are present", () => {
+    expect(() =>
+      buildRemoteCommandWithEnv({ RESTIC_PASSWORD: "x" }, "restic", ["backup", "; rm -rf /"]),
+    ).toThrow(UnsafeShellValueError);
   });
 });
