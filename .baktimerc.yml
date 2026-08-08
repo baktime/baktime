@@ -1,0 +1,34 @@
+# baktime configuration — instance-wide, non-sensitive settings only.
+#
+# Targets (which hosts/databases get backed up, on what schedule) are NOT
+# listed here. They're defined entirely by GitHub secrets named
+# BAKTIME_TARGET_<NAME>, the same way upptime configures notification
+# channels rather than its plain `sites:` list — see docs/config-reference.md
+# and docs/secrets.md for the exact format and worked examples.
+
+owner: your-github-username-or-org
+repo: your-instance-repo-name
+
+restic:
+  backend: r2
+  # Cloudflare R2 (S3-compatible), e.g.:
+  # s3:https://<account-id>.r2.cloudflarestorage.com/<bucket-name>
+  repository: s3:https://REPLACE_ME.r2.cloudflarestorage.com/REPLACE_ME
+  passwordSecretName: RESTIC_PASSWORD
+  accessKeyIdSecretName: R2_ACCESS_KEY_ID
+  secretAccessKeySecretName: R2_SECRET_ACCESS_KEY
+
+defaults:
+  retention:
+    keepLast: 14
+    keepWeekly: 8
+    keepMonthly: 12
+
+# Optional — bare target names for documentation/CI-lint only. Never
+# authoritative: discovery always comes from BAKTIME_TARGET_* secrets, with
+# or without this list.
+knownTargets: []
+
+statusSite:
+  name: My Backups
+  theme: auto

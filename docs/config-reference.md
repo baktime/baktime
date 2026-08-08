@@ -1,0 +1,141 @@
+# Configuration reference
+
+baktime's configuration is split across two places, deliberately:
+
+- **`.baktimerc.yml`** — committed to git. Instance-wide, non-sensitive
+  settings only. No target ever appears here.
+- **GitHub secrets** — one secret per target (plus satellite secrets for
+  keys/passwords), discovered dynamically at run time. See
+  [secrets.md](./secrets.md) for the full naming convention and worked
+  examples.
+
+This mirrors how upptime configures *notifications* (dynamic, secret-driven)
+rather than its *sites* list (static, committed) — targets here follow the
+notifications pattern, since even a target's host/path/schedule is
+sensitive enough to keep out of a committed file.
+
+## `.baktimerc.yml`
+
+```yaml
+owner: your-github-username-or-org
+repo: your-instance-repo-name
+
+restic:
+  backend: r2 # "r2" | "s3" | "custom" — informational; `repository` below is what actually matters
+  repository: s3:https://<account-id>.r2.cloudflarestorage.com/<bucket-name>
+  passwordSecretName: RESTIC_PASSWORD
+  accessKeyIdSecretName: R2_ACCESS_KEY_ID
+  secretAccessKeySecretName: R2_SECRET_ACCESS_KEY
+
+defaults:
+  retention:
+    keepLast: 14
+    keepHourly: 0
+    keepDaily: 0
+    keepWeekly: 8
+    keepMonthly: 12
+    keepYearly: 0
+
+knownTargets: [] # optional, docs/lint only — see below
+
+statusSite:
+  name: My Backups
+  baseUrl: /
+  logoUrl: https://example.com/logo.svg
+  theme: auto # "light" | "dark" | "auto"
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `owner`, `repo` | yes | Your instance repo's GitHub owner/name. |
+| `restic.backend` | no (default `r2`) | Informational label; doesn't change behavior — `restic.repository` is the actual connection string, and restic itself supports many backends beyond R2/S3. |
+| `restic.repository` | yes | A restic-compatible repository URL. |
+| `restic.passwordSecretName` / `accessKeyIdSecretName` / `secretAccessKeySecretName` | yes | **Names** of GitHub secrets holding the actual values — never the values themselves. |
+| `defaults.retention` | no | Falls back to restic's own defaults (effectively "keep everything") if omitted entirely. Every field is a plain [restic `forget`](https://restic.readthedocs.io/en/stable/060_forget.html) policy field; unset fields aren't passed to restic. Only used by the Phase 3 `prune.yml` — see `ROADMAP.md`. |
+| `knownTargets` | no | Bare, lowercase-kebab target names, for human documentation and CI linting only. Discovery never depends on this list being present or accurate. |
+| `statusSite.*` | no | Only used once the Phase 3 status site exists — see `ROADMAP.md`. |
+
+## Targets (via secrets, not here)
+
+Every target is a secret named `BAKTIME_TARGET_<NAME>` whose value is a
+JSON object. `<NAME>` (case-insensitive, lowercased and with `_` mapped to
+`-`) becomes the target's canonical name — used as the `history/<name>.yml`
+filename, the restic `--tag`, and the workflow matrix id.
+
+### `files` target
+
+```json
+{
+  "type": "files",
+  "host": "web1.example.com",
+  "sshUser": "deploy",
+  "sshPort": 22,
+  "sshKeySecretName": "BAKTIME_TARGET_WEBSERVER1_SSH_KEY",
+  "paths": ["/var/www", "/etc/nginx"],
+  "excludes": ["*.log", "node_modules"],
+  "resticVersion": "0.19.1",
+  "schedule": "0 3 * * *",
+  "retention": { "keepDaily": 7 }
+}
+```
+
+- `sshKeySecretName` names a **separate** secret holding the raw SSH
+  private key (PEM format) — kept out of the JSON blob so GitHub's
+  per-secret log masking applies to it individually, and because
+  multi-line PEM content is awkward to embed in a JSON string.
+- `resticVersion` and `retention` are optional; `resticVersion` defaults to
+  the pinned version in `src/restic/bootstrap-remote.ts`, `retention` falls
+  back to `.baktimerc.yml`'s `defaults.retention`.
+- `schedule` is a standard cron expression, evaluated in UTC.
+
+### `mysql` / `postgres` targets (schema exists now; adapters are Phase 2)
+
+```json
+{
+  "type": "mysql",
+  "database": "shop",
+  "connection": { "mode": "direct", "host": "db.example.com", "port": 3306, "tls": true },
+  "userSecretName": "BAKTIME_TARGET_SHOP_DB_USER",
+  "passwordSecretName": "BAKTIME_TARGET_SHOP_DB_PASSWORD",
+  "schedule": "*/30 * * * *"
+}
+```
+
+Or, when the database is only reachable through a jump host:
+
+```json
+{
+  "type": "postgres",
+  "database": "analytics",
+  "connection": {
+    "mode": "tunnel",
+    "jumpHost": "bastion.example.com",
+    "jumpUser": "deploy",
+    "jumpPort": 22,
+    "jumpSshKeySecretName": "BAKTIME_TARGET_ANALYTICS_JUMP_SSH_KEY",
+    "remoteHost": "127.0.0.1",
+    "remotePort": 5432
+  },
+  "userSecretName": "BAKTIME_TARGET_ANALYTICS_USER",
+  "passwordSecretName": "BAKTIME_TARGET_ANALYTICS_PASSWORD",
+  "schedule": "0 2 * * *"
+}
+```
+
+These validate today (`npm run build && node dist/cli/lint-config.js` only
+checks `.baktimerc.yml`, but the target schema itself is exercised by
+`test/unit/config-schema.test.ts`) but running one currently fails loudly
+with `"<type>" targets are not implemented yet (Phase 2 — see ROADMAP.md)`
+— see `src/cli/run-target.ts`.
+
+## How a secret becomes a target, precisely
+
+A `BAKTIME_TARGET_*`-prefixed secret is treated as a target if and only if
+its value parses as JSON *and* looks target-shaped (has a `type` field). A
+secret under that prefix holding a raw string (like an SSH key) is silently
+treated as "not a target" — this is what lets satellite secrets share the
+same naming prefix by convention without being mistaken for a target
+themselves. A secret that *does* parse as target-shaped JSON but fails
+schema validation is reported as an error, not silently skipped, since a
+silently-dropped target means backups silently stop. See
+`src/config/discover-targets.ts`.

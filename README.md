@@ -1,82 +1,60 @@
-![Baktime - database backups, scheduled on github](assets/baktime-banner.png)
+![baktime — database and file backups, scheduled and verified on GitHub](assets/baktime-banner.png)
 
-> **The "Upptime" for Database Backups.** > Orchestrate multiple MySQL & PostgreSQL backups to S3/R2 using GitHub Actions.
+> **The "Upptime" for backups.** GitHub Actions does the work, [restic](https://restic.net/) does the backing up, and a Cloudflare Worker exists only to trigger it reliably on a schedule.
 
-Baktime is a lightweight, configuration-first backup solution. Define your databases in a YAML file, and GitHub Actions handles the rest: parallel dumping, secure uploading to Cloudflare R2/S3, and automated status reporting.
+baktime backs up MySQL/Postgres databases and files on remote hosts
+reachable over SSH. Like [upptime](https://github.com/upptime/upptime), this
+repo is a **GitHub template**: click "Use this template" to create your
+own private instance, the same way
+[`mleczakm/infrastructure-status`](https://github.com/mleczakm/infrastructure-status)
+is an instance of `upptime/upptime`.
 
----
+## How it's different from upptime
 
-## 🛠️ Configuration (`.baktime.yml`)
+Uptime pings are tiny and safe to commit to a public repo. Backup data
+isn't. So git only ever stores config and run history — the actual backup
+bytes live in a restic repository (Cloudflare R2 by default, or any
+restic-supported backend), and **targets themselves are never committed at
+all**: which hosts and databases get backed up, and on what schedule, is
+defined entirely by GitHub secrets, the same way upptime configures
+notification channels rather than its plain `sites:` list. Adding or
+removing a target is a "add/remove a secret" operation, no PR needed. See
+[`docs/architecture.md`](docs/architecture.md) for the full design and why.
 
-Centralize your backup management. You can define multiple sources of the same or different types. Baktime will automatically spawn a parallel job for each entry.
+## How it works
 
-```yaml
-# .baktime.yml
-databases:
-  - name: main-app-mysql
-    type: mysql
-    host: db.example.com
-    port: 3306
-    user: admin
-    # The name of the secret stored in GitHub Actions Secrets
-    password_secret: DB_PROD_PASSWORD 
-    bucket: production-backups
-
-  - name: analytics-postgres
-    type: postgres
-    host: pg.analytics.io
-    port: 5432
-    user: pg_user
-    password_secret: DB_ANALYTICS_PASSWORD
-    bucket: analytics-backups
-
-notifications:
-  discord: true
-  slack: false
+```
+sync-cloudflare-schedule.yml   → projects {name, type, schedule} from secrets into Cloudflare KV
+Cloudflare Worker (cron)       → reads KV, fires repository_dispatch only for targets actually due
+backup.yml                     → re-derives the target from secrets, backs it up, commits history/*.yml
 ```
 
----
+For file targets, restic runs *on the target host* itself (self-installed
+over SSH, no root, works on Alpine and glibc alike) so its incremental
+dedup carries over between runs and file bytes never transit the Actions
+runner. Database targets stream `mysqldump`/`pg_dump` straight into
+`restic backup --stdin` from the runner instead, since many databases
+offer no shell access to install anything on.
 
-## 🚀 How it Works
+## Status
 
-Baktime utilizes the **GitHub Actions Matrix Strategy**. This allows the workflow to scale dynamically based on your configuration file.
+**Phase 1** (this release): config schema, secrets-driven dynamic target
+discovery, cron-based scheduling, a complete `files`-target backup path
+end to end, and the schedule-aware Cloudflare Worker. Database targets,
+the status site, retention/pruning, and restore verification are designed
+but not yet built — see [`ROADMAP.md`](ROADMAP.md).
 
-1. **Parser:** A setup job reads `.baktime.yml` and generates a JSON matrix.
-2. **Backup Workers:** GitHub spins up multiple runners simultaneously (one for each database).
-3. **Stream to S3:** Data is dumped and streamed directly to your S3-compatible storage (e.g., Cloudflare R2) to avoid filling up runner disk space.
-4. **Status Update:** The results are committed to the `gh-pages` branch to update your dashboard.
+## Getting started
 
----
+See [`docs/getting-started.md`](docs/getting-started.md).
 
-## ⚙️ Setup & Secrets
+## Documentation
 
-### 1. Global S3 Credentials
-Add these to **Settings > Secrets and variables > Actions** in your repository:
-* `S3_ACCESS_KEY`: Your S3/R2 Access Key ID.
-* `S3_SECRET_KEY`: Your S3/R2 Secret Access Key.
-* `S3_ENDPOINT`: Your S3 endpoint (e.g., `https://<id>.r2.cloudflarestorage.com`).
-
-### 2. Database Passwords
-For each database in your YAML, add a secret with the name you specified in `password_secret`.
-* *Example:* If you set `password_secret: MY_DB_PASS`, create a GitHub secret named `MY_DB_PASS`.
-
----
-
-## ✨ Features
-
-- **Multi-source:** Supports unlimited MySQL & PostgreSQL instances in one repo.
-- **Parallelism:** Matrix Strategy ensures fast, concurrent execution.
-- **S3-Compatible:** Tested with Cloudflare R2, AWS S3, Wasabi, and Backblaze B2.
-- **Alerts:** Get Discord or Slack pings the moment a backup fails.
-- **Serverless:** $0/month cost using GitHub's free tier for public repositories.
+- [`docs/getting-started.md`](docs/getting-started.md) — set up your own instance
+- [`docs/config-reference.md`](docs/config-reference.md) — `.baktimerc.yml` and target JSON reference
+- [`docs/secrets.md`](docs/secrets.md) — exactly which secrets to create and how to scope them
+- [`docs/architecture.md`](docs/architecture.md) — the full design, and why it differs from upptime where it does
+- [`ROADMAP.md`](ROADMAP.md) — what's built vs. designed-but-not-yet-built
 
 ---
-
-## 📊 Status Page
-Your status page is automatically generated and hosted on GitHub Pages. It visualizes:
-- **Uptime of Backups:** 30-day success/failure history.
-- **Metadata:** Last backup size and timestamp.
-- **Logs:** Direct links to GitHub Action logs for failed runs.
-
----
-*Inspired by the architecture of Upptime. Built for reliability and simplicity.*
+*Architecture inspired by [upptime](https://github.com/upptime/upptime); backup engine is [restic](https://restic.net/).*
