@@ -114,7 +114,13 @@ export type Target = z.infer<typeof TargetSchema>;
 /** A `Target` with its name attached from the `BAKTIME_TARGET_<NAME>` secret suffix. */
 export type NamedTarget = Target & { name: string };
 
-export function withName(target: Target, name: string): NamedTarget {
+/**
+ * Generic in `T` so that calling this with an already-narrowed target type
+ * (e.g. a `FilesTarget` literal) returns `FilesTarget & { name: string }`,
+ * not the widened `Target` union — discover-targets.ts, which only knows
+ * the member type at runtime, still gets back the general `NamedTarget`.
+ */
+export function withName<T extends Target>(target: T, name: string): T & { name: string } {
   return { ...target, name };
 }
 
