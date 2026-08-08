@@ -1,4 +1,4 @@
-import { execFile as execFileCb } from "node:child_process";
+import { execFile as execFileCb, spawn } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFileCb);
@@ -61,4 +61,98 @@ export async function execFile(
       err.stderr ?? String(err.message ?? error),
     );
   }
+}
+
+export interface PipelineProcessSpec {
+  command: string;
+  args: readonly string[];
+  env?: NodeJS.ProcessEnv;
+}
+
+export interface PipelineResult {
+  /** The consumer's stdout (e.g. restic's `--json` summary). */
+  stdout: string;
+  stderr: string;
+}
+
+/**
+ * Runs `producer | consumer` without a shell: the producer's stdout is
+ * piped directly into the consumer's stdin via Node streams. Used for
+ * `mysqldump`/`pg_dump` -> `restic backup --stdin`, so a large dump is
+ * never buffered whole in memory and never passes through a shell pipe.
+ * Rejects with whichever process's `ExecError` explains the failure; if the
+ * producer fails, the consumer is killed rather than left reading a partial,
+ * silently-truncated stream.
+ */
+export function spawnPipeline(
+  producer: PipelineProcessSpec,
+  consumer: PipelineProcessSpec,
+): Promise<PipelineResult> {
+  return new Promise((resolve, reject) => {
+    const producerProc = spawn(producer.command, producer.args as string[], {
+      env: producer.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const consumerProc = spawn(consumer.command, consumer.args as string[], {
+      env: consumer.env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    let producerStderr = "";
+    let consumerStdout = "";
+    let consumerStderr = "";
+    producerProc.stderr?.on("data", (chunk: Buffer) => {
+      producerStderr += chunk.toString();
+    });
+    consumerProc.stdout?.on("data", (chunk: Buffer) => {
+      consumerStdout += chunk.toString();
+    });
+    consumerProc.stderr?.on("data", (chunk: Buffer) => {
+      consumerStderr += chunk.toString();
+    });
+
+    producerProc.stdout?.pipe(consumerProc.stdin!);
+
+    let settled = false;
+    let producerFailure: ExecError | null = null;
+
+    function settleReject(error: Error): void {
+      if (settled) return;
+      settled = true;
+      producerProc.kill();
+      consumerProc.kill();
+      reject(error);
+    }
+
+    producerProc.on("error", (error) => {
+      settleReject(new ExecError(producer.command, producer.args, null, "", error.message));
+    });
+    consumerProc.on("error", (error) => {
+      settleReject(new ExecError(consumer.command, consumer.args, null, "", error.message));
+    });
+
+    producerProc.on("close", (code) => {
+      if (code !== 0) {
+        producerFailure = new ExecError(producer.command, producer.args, code, "", producerStderr);
+        // The consumer's stdin won't naturally end if the producer died
+        // mid-stream without closing its stdout — make sure it doesn't hang
+        // forever waiting for input that will never arrive.
+        consumerProc.kill();
+      }
+    });
+
+    consumerProc.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      if (producerFailure) {
+        reject(producerFailure);
+        return;
+      }
+      if (code !== 0) {
+        reject(new ExecError(consumer.command, consumer.args, code, consumerStdout, consumerStderr));
+        return;
+      }
+      resolve({ stdout: consumerStdout, stderr: consumerStderr });
+    });
+  });
 }
