@@ -48,12 +48,38 @@ statusSite:
 | Field | Required | Notes |
 |---|---|---|
 | `owner`, `repo` | yes | Your instance repo's GitHub owner/name. |
-| `restic.backend` | no (default `r2`) | Informational label; doesn't change behavior — `restic.repository` is the actual connection string, and restic itself supports many backends beyond R2/S3. |
-| `restic.repository` | yes | A restic-compatible repository URL. |
-| `restic.passwordSecretName` / `accessKeyIdSecretName` / `secretAccessKeySecretName` | yes | **Names** of GitHub secrets holding the actual values — never the values themselves. |
+| `restic.backend` | no (default `r2`) | `"r2"` \| `"s3"` \| `"local"` \| `"custom"`. Mostly informational — `restic.repository` is the actual connection string — except that `"r2"`/`"s3"` *require* `accessKeyIdSecretName`/`secretAccessKeySecretName` below; `"local"`/`"custom"` don't. |
+| `restic.repository` | yes | A restic-compatible repository URL, or an absolute local path for the `local` backend. |
+| `restic.passwordSecretName` | yes | **Name** of a GitHub secret holding `RESTIC_PASSWORD` — required for every backend, since restic always encrypts the repository regardless of where it lives. |
+| `restic.accessKeyIdSecretName` / `secretAccessKeySecretName` | only for `r2`/`s3` | **Names** of GitHub secrets holding the actual S3-style credential values — never the values themselves. Omit for `local`/`custom` unless that backend actually needs them. |
 | `defaults.retention` | no | Falls back to restic's own defaults (effectively "keep everything") if omitted entirely. Every field is a plain [restic `forget`](https://restic.readthedocs.io/en/stable/060_forget.html) policy field; unset fields aren't passed to restic. Only used by the Phase 3 `prune.yml` — see `ROADMAP.md`. |
 | `knownTargets` | no | Bare, lowercase-kebab target names, for human documentation and CI linting only. Discovery never depends on this list being present or accurate. |
 | `statusSite.*` | no | Only used once the Phase 3 status site exists — see `ROADMAP.md`. |
+
+### Local storage backend
+
+If you'd rather keep backups on a disk you already control (e.g. an
+external drive mounted at `/storage` on a VPS) than pay for R2/S3:
+
+```yaml
+restic:
+  backend: local
+  repository: /storage/restic-repo
+  passwordSecretName: RESTIC_PASSWORD
+```
+
+**Only `files` targets can use this.** A `files` target's restic process
+runs on the target host itself (see `docs/architecture.md`), so a local
+path is simply a directory on that same machine — no network access
+needed. `mysql`/`postgres` targets dump on the ephemeral GitHub Actions
+runner, which has no access to your VPS's filesystem, so they need a
+network-reachable repository instead. `src/cli/run-target.ts` rejects a
+`mysql`/`postgres` target outright with a clear error if `restic.backend`
+is `local`, rather than letting it fail confusingly partway through a run.
+
+If your files target's host *is* the same VPS as `/storage`, this is the
+natural setup: point `repository` at a path under `/storage`, and restic
+writes there directly during the remote backup.
 
 ## Targets (via secrets, not here)
 

@@ -46,8 +46,8 @@ async function withPrivateKeyFile<T>(
 }
 
 export interface RunRemoteCommandOptions {
-  /** Environment variables (e.g. restic credentials) exported into this one remote invocation only — never written to disk. */
-  env?: Readonly<Record<string, string>>;
+  /** Environment variables (e.g. restic credentials) exported into this one remote invocation only — never written to disk. Undefined values are skipped, not stringified. */
+  env?: Readonly<Record<string, string | undefined>>;
 }
 
 /** Runs one command on the remote host, over SSH, using a temporary key file cleaned up in a `finally`. */

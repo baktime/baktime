@@ -3,6 +3,7 @@ import {
   BaktimeConfigSchema,
   FilesTargetSchema,
   MysqlTargetSchema,
+  ResticBackendConfigSchema,
   TargetSchema,
 } from "../../src/config/schema.js";
 
@@ -60,6 +61,63 @@ describe("BaktimeConfigSchema", () => {
       repo: "backup",
       restic: validResticConfig,
       knownTargets: ["WebServer1"],
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("ResticBackendConfigSchema", () => {
+  it("requires S3 credentials for the r2 backend", () => {
+    const result = ResticBackendConfigSchema.safeParse({
+      backend: "r2",
+      repository: "s3:https://accountid.r2.cloudflarestorage.com/my-bucket",
+      passwordSecretName: "RESTIC_PASSWORD",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("requires S3 credentials for the s3 backend", () => {
+    const result = ResticBackendConfigSchema.safeParse({
+      backend: "s3",
+      repository: "s3:https://s3.amazonaws.com/my-bucket",
+      passwordSecretName: "RESTIC_PASSWORD",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("does not require S3 credentials for the local backend", () => {
+    const result = ResticBackendConfigSchema.safeParse({
+      backend: "local",
+      repository: "/storage/restic-repo",
+      passwordSecretName: "RESTIC_PASSWORD",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("does not require S3 credentials for the custom backend", () => {
+    const result = ResticBackendConfigSchema.safeParse({
+      backend: "custom",
+      repository: "rest:https://restic-rest-server.example.com/",
+      passwordSecretName: "RESTIC_PASSWORD",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("still accepts S3 credentials on a local/custom backend if explicitly provided", () => {
+    const result = ResticBackendConfigSchema.safeParse({
+      backend: "local",
+      repository: "/storage/restic-repo",
+      passwordSecretName: "RESTIC_PASSWORD",
+      accessKeyIdSecretName: "SOME_KEY",
+      secretAccessKeySecretName: "SOME_SECRET",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("defaults backend to r2 when omitted, and still requires its credentials", () => {
+    const result = ResticBackendConfigSchema.safeParse({
+      repository: "s3:https://accountid.r2.cloudflarestorage.com/my-bucket",
+      passwordSecretName: "RESTIC_PASSWORD",
     });
     expect(result.success).toBe(false);
   });

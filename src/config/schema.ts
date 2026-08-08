@@ -126,13 +126,28 @@ export function withName<T extends Target>(target: T, name: string): T & { name:
 
 export const ResticBackendConfigSchema = z
   .object({
-    backend: z.enum(["r2", "s3", "custom"]).default("r2"),
+    backend: z.enum(["r2", "s3", "local", "custom"]).default("r2"),
     repository: z.string().min(1),
     passwordSecretName: SecretNameSchema,
-    accessKeyIdSecretName: SecretNameSchema,
-    secretAccessKeySecretName: SecretNameSchema,
+    // Optional: a "local" repository (a path on whatever host restic runs
+    // on — only meaningful for `files` targets, which run restic on the
+    // target host itself; see docs/config-reference.md) needs no S3-style
+    // credentials at all. "custom" may or may not need them depending on
+    // what it points at, so they stay optional there too.
+    accessKeyIdSecretName: SecretNameSchema.optional(),
+    secretAccessKeySecretName: SecretNameSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (config) =>
+      config.backend !== "r2" && config.backend !== "s3"
+        ? true
+        : Boolean(config.accessKeyIdSecretName && config.secretAccessKeySecretName),
+    {
+      message: 'accessKeyIdSecretName and secretAccessKeySecretName are required when backend is "r2" or "s3"',
+      path: ["accessKeyIdSecretName"],
+    },
+  );
 export type ResticBackendConfig = z.infer<typeof ResticBackendConfigSchema>;
 
 export const StatusSiteConfigSchema = z

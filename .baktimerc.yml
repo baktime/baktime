@@ -17,6 +17,15 @@ restic:
   passwordSecretName: RESTIC_PASSWORD
   accessKeyIdSecretName: R2_ACCESS_KEY_ID
   secretAccessKeySecretName: R2_SECRET_ACCESS_KEY
+  #
+  # Alternative: a local path on whatever host restic runs on. Only usable
+  # by `files` targets (restic runs on the target host itself for those —
+  # see docs/architecture.md); database targets need a network-reachable
+  # backend since their dumps run on the GitHub Actions runner. No S3
+  # credentials needed for this backend:
+  # backend: local
+  # repository: /storage/restic-repo
+  # passwordSecretName: RESTIC_PASSWORD
 
 defaults:
   retention:

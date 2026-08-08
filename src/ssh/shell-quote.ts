@@ -76,11 +76,15 @@ export function buildRemoteCommand(command: string, args: readonly string[]): st
  * v1.
  */
 export function buildRemoteCommandWithEnv(
-  env: Readonly<Record<string, string>>,
+  env: Readonly<Record<string, string | undefined>>,
   command: string,
   args: readonly string[],
 ): string {
+  // Undefined entries (e.g. AWS_* keys that a "local" restic backend never
+  // sets — see restic/env.ts) are skipped rather than erroring, so callers
+  // can pass a ResticEnv-shaped object straight through without filtering.
   const assignments = Object.entries(env)
+    .filter((entry): entry is [string, string] => entry[1] !== undefined)
     .map(([key, value]) => `${key}=${shellQuoteRaw(value)}`)
     .join(" ");
   const rest = buildRemoteCommand(command, args);
