@@ -1,0 +1,14 @@
+name: Restore drill (Phase 5 — not implemented yet)
+
+# Will periodically restore a sample from the latest snapshot per target
+# (on-host for files, into a throwaway DB service container for mysql/
+# postgres) to prove backups are actually restorable, not just "backup
+# succeeded". See ROADMAP.md, Phase 5.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "restore-drill.yml is a placeholder — see ROADMAP.md, Phase 5"

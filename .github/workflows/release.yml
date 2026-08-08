@@ -1,0 +1,17 @@
+name: Release (not implemented yet)
+
+# baktime is consumed as a GitHub template repo (instances are created via
+# "Use this template" and build from source directly — see
+# docs/architecture.md), not as a versioned `uses: baktime/baktime@v1`
+# external Action, so there's no committed dist/ to keep in sync with a
+# release tag the way a typical JS Action would need. A release/changelog
+# workflow for the template repo itself is still plausibly useful but is a
+# separate, not-yet-made design decision — placeholder until then.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "release.yml is a placeholder — versioning strategy not yet decided"

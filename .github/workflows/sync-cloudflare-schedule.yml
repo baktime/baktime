@@ -1,0 +1,36 @@
+name: Sync Cloudflare schedule manifest
+
+# Projects every discovered target down to {name, type, schedule} — never
+# host/paths/credentials — and pushes it into the Cloudflare Worker's KV, so
+# the Worker can decide per-target when to fire without ever needing to read
+# a GitHub secret value (which the API can't expose to it anyway). GitHub's
+# own `schedule:` trigger is imprecise by several minutes, which is fine
+# here: this only propagates *schedule changes*, not the backup trigger
+# itself, so a short delay after adding/editing a target's secret is
+# harmless. Run it manually after adding a target if you want it picked up
+# immediately instead of waiting for the next tick.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Sync schedule manifest to Cloudflare KV
+        env:
+          BAKTIME_SECRETS_JSON: ${{ toJSON(secrets) }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node dist/cli/sync-schedule-manifest.js

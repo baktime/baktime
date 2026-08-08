@@ -1,0 +1,13 @@
+name: Summary and incident issues (Phase 5 — not implemented yet)
+
+# Will open/update/close a labeled GitHub Issue per target on health
+# transitions (healthy -> failing -> resolved), mirroring upptime's incident
+# automation. See ROADMAP.md, Phase 5.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "summary.yml is a placeholder — see ROADMAP.md, Phase 5"

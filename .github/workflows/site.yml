@@ -1,0 +1,12 @@
+name: Status site (Phase 3 — not implemented yet)
+
+# Will build status-site/ (reading api/*.json generated from history/) and
+# deploy it to GitHub Pages. See ROADMAP.md, Phase 3.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "site.yml is a placeholder — see ROADMAP.md, Phase 3"

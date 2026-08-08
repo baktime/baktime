@@ -1,0 +1,12 @@
+name: Prune (Phase 3 — not implemented yet)
+
+# Will run `restic forget --prune` per target's retention policy and
+# `restic check`, scoped by restic tag. See ROADMAP.md, Phase 3.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "prune.yml is a placeholder — see ROADMAP.md, Phase 3"

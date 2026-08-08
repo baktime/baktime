@@ -1,0 +1,111 @@
+name: Backup
+
+# Fired two ways: (1) the Cloudflare Worker sends a generic repository_dispatch
+# with client_payload.target for whichever single target its KV schedule
+# manifest says is due right now — see cloudflare-worker/src/index.ts and
+# docs/architecture.md; (2) workflow_dispatch is a manual "run everything
+# that's due right now" fallback that doesn't wait for the Worker's next tick.
+on:
+  repository_dispatch:
+    types: [baktime-backup]
+  workflow_dispatch: {}
+
+# Both paths write to history/*.yml and commit it — serialize whole runs so
+# two dispatches (or a dispatch overlapping a manual run) never race on the
+# same git push. Never cancel a backup mid-flight.
+concurrency:
+  group: baktime-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  backup-dispatched-target:
+    if: github.event_name == 'repository_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Run target
+        env:
+          BAKTIME_SECRETS_JSON: ${{ toJSON(secrets) }}
+        run: node dist/cli/run-target.js "${{ github.event.client_payload.target }}"
+      - name: Commit history
+        run: |
+          git config user.name "baktime-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add history
+          if git diff --cached --quiet; then
+            echo "No history changes to commit"
+          else
+            git commit -m "chore(history): ${{ github.event.client_payload.target }} backup run"
+            git pull --rebase
+            git push
+          fi
+
+  discover-due-targets:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      due: ${{ steps.discover.outputs.due }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Discover due targets
+        id: discover
+        env:
+          BAKTIME_SECRETS_JSON: ${{ toJSON(secrets) }}
+        run: node dist/cli/discover-due-targets.js
+
+  backup-due-targets:
+    needs: discover-due-targets
+    if: needs.discover-due-targets.outputs.due != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # Small target counts are the expectation here (personal sites/dbs);
+      # serializing avoids every matrix job racing to commit/push history at
+      # once, which is simpler than aggregating results across jobs.
+      max-parallel: 1
+      matrix:
+        target: ${{ fromJSON(needs.discover-due-targets.outputs.due) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Run target
+        env:
+          BAKTIME_SECRETS_JSON: ${{ toJSON(secrets) }}
+          # discover-due-targets.js already applied the due check; run-target.js
+          # would otherwise re-derive the exact same answer from the same
+          # history state, so skip the redundant check rather than risk it
+          # disagreeing after time has passed between the two jobs.
+          BAKTIME_SKIP_DUE_CHECK: "true"
+        run: node dist/cli/run-target.js "${{ matrix.target }}"
+      - name: Commit history
+        run: |
+          git config user.name "baktime-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add history
+          if git diff --cached --quiet; then
+            echo "No history changes to commit"
+          else
+            git commit -m "chore(history): ${{ matrix.target }} backup run"
+            git pull --rebase
+            git push
+          fi
