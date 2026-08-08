@@ -1,0 +1,26 @@
+name = "baktime-dispatcher"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+# Fixed, short tick — the finest granularity any target's own `schedule`
+# could reasonably need. This is *not* per-target; per-target timing comes
+# from the KV manifest below, evaluated inside the tick.
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+GITHUB_OWNER = "REPLACE_ME" # e.g. "mleczakm" — the instance repo's owner
+GITHUB_REPO = "REPLACE_ME"  # e.g. "backup" — the instance repo's name
+DISPATCH_EVENT_TYPE = "baktime-backup"
+
+# Provisioned once via `wrangler kv namespace create BAKTIME_SCHEDULES`,
+# then paste the printed id below. Holds only {name, type, schedule} per
+# target (written by sync-cloudflare-schedule.yml) and a lastfired:<name>
+# timestamp per target — never host/paths/credentials.
+[[kv_namespaces]]
+binding = "BAKTIME_SCHEDULES"
+id = "REPLACE_ME"
+
+# GH_PAT is set separately via `wrangler secret put GH_PAT` (also done
+# automatically on every deploy by .github/workflows/deploy-cloudflare-worker.yml)
+# — never put a secret value in this file.
