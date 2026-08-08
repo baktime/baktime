@@ -55,9 +55,15 @@ export function buildBackupStdinArgs(options: BackupStdinArgsOptions): string[] 
   ];
 }
 
-/** Runs restic locally (on the GH Actions runner) — used for repository setup and, in Phase 2, DB `--stdin` backups. */
-export async function runLocalRestic(args: readonly string[], env: ResticEnv) {
-  return execFile("restic", args, { env });
+/**
+ * Runs restic locally (on the GH Actions runner) — used for repository
+ * setup and for DB `--stdin` backups. `resticPath` defaults to bare
+ * `"restic"` (resolved via PATH) but callers should normally pass the path
+ * resolved by `restic/bootstrap-local.ts`'s `ensureLocalResticInstalled`,
+ * since restic isn't preinstalled on GitHub-hosted runners.
+ */
+export async function runLocalRestic(args: readonly string[], env: ResticEnv, resticPath = "restic") {
+  return execFile(resticPath, args, { env });
 }
 
 /**
@@ -68,12 +74,13 @@ export async function runLocalRestic(args: readonly string[], env: ResticEnv) {
  */
 export async function ensureRepositoryInitialized(
   env: ResticEnv,
+  resticPath = "restic",
 ): Promise<"already-initialized" | "initialized"> {
   try {
-    await runLocalRestic(buildSnapshotsArgs({ latest: 1 }), env);
+    await runLocalRestic(buildSnapshotsArgs({ latest: 1 }), env, resticPath);
     return "already-initialized";
   } catch {
-    await runLocalRestic(buildInitArgs(), env);
+    await runLocalRestic(buildInitArgs(), env, resticPath);
     return "initialized";
   }
 }

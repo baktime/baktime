@@ -10,6 +10,11 @@ vi.mock("../../src/restic/client.js", () => ({
   ensureRepositoryInitialized: (...args: unknown[]) => ensureRepositoryInitializedMock(...args),
 }));
 
+const ensureLocalResticInstalledMock = vi.fn();
+vi.mock("../../src/restic/bootstrap-local.js", () => ({
+  ensureLocalResticInstalled: (...args: unknown[]) => ensureLocalResticInstalledMock(...args),
+}));
+
 const backupFilesTargetMock = vi.fn();
 vi.mock("../../src/adapters/files.js", () => ({
   backupFilesTarget: (...args: unknown[]) => backupFilesTargetMock(...args),
@@ -57,16 +62,24 @@ afterEach(() => {
   delete process.env.BAKTIME_SKIP_DUE_CHECK;
   loadConfigMock.mockReset();
   ensureRepositoryInitializedMock.mockReset();
+  ensureLocalResticInstalledMock.mockReset();
   backupFilesTargetMock.mockReset();
   getLastRunAtMock.mockReset();
   appendRecordMock.mockReset();
 });
+
+const localBootstrapResult = {
+  version: "0.19.1",
+  action: "already-installed" as const,
+  resticPath: "/home/runner/.baktime/bin/restic",
+};
 
 describe("runTarget", () => {
   it("runs the adapter and appends a success record when the target is due", async () => {
     setSecretsEnv();
     loadConfigMock.mockReturnValue({ owner: "x", repo: "y", restic: resticConfig });
     getLastRunAtMock.mockReturnValue(null); // never run -> due
+    ensureLocalResticInstalledMock.mockResolvedValue(localBootstrapResult);
     ensureRepositoryInitializedMock.mockResolvedValue("already-initialized");
     backupFilesTargetMock.mockResolvedValue({
       snapshotId: "abc123",
@@ -76,7 +89,11 @@ describe("runTarget", () => {
 
     await runTarget("webserver1");
 
-    expect(ensureRepositoryInitializedMock).toHaveBeenCalledTimes(1);
+    expect(ensureLocalResticInstalledMock).toHaveBeenCalledTimes(1);
+    expect(ensureRepositoryInitializedMock).toHaveBeenCalledWith(
+      expect.anything(),
+      localBootstrapResult.resticPath,
+    );
     expect(backupFilesTargetMock).toHaveBeenCalledTimes(1);
     expect(appendRecordMock).toHaveBeenCalledTimes(1);
     const [name, record] = appendRecordMock.mock.calls[0] as [string, Record<string, unknown>];
@@ -107,6 +124,7 @@ describe("runTarget", () => {
     process.env.BAKTIME_SKIP_DUE_CHECK = "true";
     loadConfigMock.mockReturnValue({ owner: "x", repo: "y", restic: resticConfig });
     getLastRunAtMock.mockReturnValue(new Date()); // would normally not be due
+    ensureLocalResticInstalledMock.mockResolvedValue(localBootstrapResult);
     ensureRepositoryInitializedMock.mockResolvedValue("already-initialized");
     backupFilesTargetMock.mockResolvedValue({ snapshotId: "abc", bytesAdded: 1 });
 
@@ -119,6 +137,7 @@ describe("runTarget", () => {
     setSecretsEnv();
     loadConfigMock.mockReturnValue({ owner: "x", repo: "y", restic: resticConfig });
     getLastRunAtMock.mockReturnValue(null);
+    ensureLocalResticInstalledMock.mockResolvedValue(localBootstrapResult);
     ensureRepositoryInitializedMock.mockResolvedValue("already-initialized");
     backupFilesTargetMock.mockRejectedValue(new Error("ssh: connection refused"));
 

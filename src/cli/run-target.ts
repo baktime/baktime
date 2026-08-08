@@ -5,6 +5,7 @@ import type { BaktimeConfig, NamedTarget } from "../config/schema.js";
 import { SecretsStore } from "../config/secrets.js";
 import { appendRecord, getLastRunAt } from "../history/writer.js";
 import type { HistoryRecord } from "../history/types.js";
+import { ensureLocalResticInstalled } from "../restic/bootstrap-local.js";
 import { ensureRepositoryInitialized } from "../restic/client.js";
 import { buildResticEnv } from "../restic/env.js";
 import { isDue } from "../scheduling/is-due.js";
@@ -66,7 +67,11 @@ export async function runTarget(targetName: string): Promise<void> {
 
   const startedAt = new Date();
   const resticEnv = buildResticEnv(config.restic, secrets);
-  await ensureRepositoryInitialized(resticEnv);
+  // restic isn't preinstalled on GitHub-hosted runners — every run needs a
+  // local copy at least for this repo-setup step, and database targets need
+  // it again for their own `restic backup --stdin` invocation.
+  const { resticPath: localResticPath } = await ensureLocalResticInstalled();
+  await ensureRepositoryInitialized(resticEnv, localResticPath);
 
   try {
     const result = await runAdapter(target, secrets, config.restic);
