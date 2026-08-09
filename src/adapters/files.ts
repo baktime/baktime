@@ -75,7 +75,7 @@ export async function backupFilesTarget(
       ]);
       const integrity = await runRemoteCommand(sshTarget, "sqlite3", [
         sqliteBackup.destination,
-        "PRAGMA integrity_check;",
+        "PRAGMA integrity_check",
       ]);
       if (integrity.stdout.trim() !== "ok") {
         throw new Error(

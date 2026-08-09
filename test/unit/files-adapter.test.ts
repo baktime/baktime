@@ -128,7 +128,7 @@ describe("backupFilesTarget", () => {
     runRemoteCommandMock.mockImplementation(
       async (_target: unknown, _command: string, args: string[]) => {
         if (args[0] === "backup") return { stdout: summaryLine, stderr: "" };
-        if (args[1] === "PRAGMA integrity_check;") return { stdout: "ok\n", stderr: "" };
+        if (args[1] === "PRAGMA integrity_check") return { stdout: "ok\n", stderr: "" };
         return { stdout: "[]", stderr: "" };
       },
     );
