@@ -10,9 +10,10 @@ touching anything, so a wrong tag or target name is recoverable from
 ## Finding what's available to restore
 
 Every successful run is recorded in `history/<target-name>.yml`, newest last,
-each entry with its `snapshotId` and `timestamp`. That's the quickest way to
-see what exists without touching the restic repository directly. (A status
-page presenting this more browsably is planned — see `ROADMAP.md`.)
+each entry with its `snapshotId` and `timestamp`. The generated status page
+also presents the ten most recent runs/snapshot IDs for every active target;
+`site.yml` publishes it through the same Cloudflare Worker used for schedules
+and uploads a downloadable `status-site` workflow artifact.
 
 ## Rolling back a database (mysql/postgres) target
 
@@ -68,6 +69,12 @@ This is intentionally a human decision point, not something the tool
 automates — a files snapshot can span multiple unrelated paths (application
 code, a docker volume, ...) and silently clobbering live files is a much
 worse failure mode than having to run one `rsync` yourself.
+
+For snapshots that include `sqliteBackups`, the consistent database copies
+appear under their configured staging paths in the restored tree. Stop the
+application container before replacing its live SQLite files, preserve file
+ownership, and restart it only after running `PRAGMA integrity_check` on the
+restored copies.
 
 ## Safety notes
 

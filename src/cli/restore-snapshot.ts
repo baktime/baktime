@@ -233,7 +233,7 @@ async function restoreFilesSnapshot(
   const bootstrap = await ensureRemoteResticInstalled(sshTarget, { version: target.resticVersion });
 
   const config = loadConfig(process.env.BAKTIME_CONFIG_PATH ?? ".baktimerc.yml");
-  const resticEnv = buildResticEnv(config.restic, secrets);
+  const resticEnv = buildResticEnv(target.restic ?? config.restic, secrets);
 
   const { stdout: snapshotsJson } = await runRemoteCommand(
     sshTarget,

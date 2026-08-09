@@ -15,6 +15,7 @@ interface ScheduleManifestEntry {
 }
 
 const MANIFEST_KEY = "manifest";
+const STATUS_PAGE_KEY = "status-page";
 const SCHEDULE_TZ = "UTC";
 
 /**
@@ -108,13 +109,25 @@ export default {
     ctx.waitUntil(tick(env));
   },
 
-  // Not an HTTP-triggered Worker — this only exists so an accidental visit
-  // (or an uptime check pointed at the wrong URL) gets a clear answer
-  // instead of Cloudflare's generic error page.
-  fetch(): Response {
-    return new Response(
-      "baktime-dispatcher: schedule-only Worker, responds to its cron trigger, not HTTP requests.",
-      { status: 404 },
-    );
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname === "/health") {
+      return new Response("ok", { headers: { "Cache-Control": "no-store" } });
+    }
+    if (url.pathname !== "/") {
+      return new Response("Not found", { status: 404 });
+    }
+
+    const html = await env.BAKTIME_SCHEDULES.get(STATUS_PAGE_KEY);
+    if (!html) {
+      return new Response("baktime status page has not been generated yet", { status: 503 });
+    }
+    return new Response(html, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "public, max-age=60",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
   },
 } satisfies ExportedHandler<Env>;

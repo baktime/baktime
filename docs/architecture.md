@@ -126,6 +126,12 @@ networking or hashing the way the remote/SSH bootstrap does) before any
 adapter — including the one-time repository-initialization step every run
 needs regardless of target type.
 
+A files target may override the global restic backend. This is how one
+instance can keep MySQL/Postgres dumps in R2 while writing a VPS filesystem
+snapshot to an attached disk. Live SQLite files can be declared through
+`sqliteBackups`; baktime uses SQLite's online backup API and verifies the
+copy before adding it to restic, avoiding inconsistent `.db`/WAL snapshots.
+
 ### Restoring a database snapshot into a live target
 
 The `Restore snapshot into a live target` workflow

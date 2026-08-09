@@ -122,6 +122,7 @@ describe("renderSiteHtml", () => {
     expect(html).toContain("wanda-postgres");
     expect(html).toContain("failing");
     expect(html).toContain("Access denied for user");
+    expect(html).toContain("Available backups (recent snapshots)");
   });
 
   it("escapes error messages so they can't inject markup into the page", () => {

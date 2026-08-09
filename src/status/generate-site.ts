@@ -103,7 +103,7 @@ function renderTargetCard(status: TargetStatus): string {
       <p class="meta">${escapeHtml(status.type)} · schedule <code>${escapeHtml(status.schedule)}</code></p>
       ${
         status.recentRuns.length > 0
-          ? `<table>
+          ? `<h3>Available backups (recent snapshots)</h3><table>
               <thead><tr><th>When</th><th></th><th>Duration</th><th>Result</th></tr></thead>
               <tbody>${rows}</tbody>
             </table>`
@@ -126,6 +126,7 @@ export function renderSiteHtml(statuses: readonly TargetStatus[], generatedAt: D
   .generated-at { color: #888; font-size: 0.85rem; margin-top: -0.5rem; }
   section.target { border: 1px solid #ccc4; border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0; }
   section.target h2 { margin: 0 0 0.25rem; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; }
+  section.target h3 { margin: 0.8rem 0 0.35rem; font-size: 0.9rem; }
   .meta { color: #888; font-size: 0.85rem; margin: 0 0 0.75rem; }
   .badge { font-size: 0.7rem; font-weight: normal; padding: 0.15rem 0.5rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; }
   .health-healthy .badge { background: #2ecc7133; color: #1e8449; }

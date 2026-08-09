@@ -186,6 +186,32 @@ describe("FilesTargetSchema", () => {
     const result = FilesTargetSchema.safeParse({ ...validFilesTarget, unexpected: "nope" });
     expect(result.success).toBe(false);
   });
+
+  it("accepts a target-specific local restic repository and SQLite backup jobs", () => {
+    const result = FilesTargetSchema.safeParse({
+      ...validFilesTarget,
+      restic: {
+        backend: "local",
+        repository: "/storage/backup/restic",
+        passwordSecretName: "RESTIC_PASSWORD",
+      },
+      sqliteBackups: [
+        {
+          source: "/var/lib/docker/volumes/cargo-db/_data/event_store.db",
+          destination: "/storage/.baktime-staging/cargo/event_store.db",
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects relative SQLite source/destination paths", () => {
+    const result = FilesTargetSchema.safeParse({
+      ...validFilesTarget,
+      sqliteBackups: [{ source: "cargo.db", destination: "backup/cargo.db" }],
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("MysqlTargetSchema / database connection modes", () => {

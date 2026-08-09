@@ -90,7 +90,11 @@ describe("backupFilesTarget", () => {
     expect(bootstrapOptions.version).toBeUndefined();
 
     // Backup ran the bootstrapped restic path, tagged with the target name, with excludes applied.
-    const [, resticPath, args, options] = runRemoteCommandMock.mock.calls[0] as [
+    const backupCall = runRemoteCommandMock.mock.calls.find(
+      (call) => Array.isArray(call[2]) && call[2][0] === "backup",
+    );
+    expect(backupCall).toBeDefined();
+    const [, resticPath, args, options] = backupCall as [
       unknown,
       string,
       string[],
@@ -113,6 +117,74 @@ describe("backupFilesTarget", () => {
       AWS_ACCESS_KEY_ID: "AKIA...",
       AWS_SECRET_ACCESS_KEY: "shh",
     });
+  });
+
+  it("uses a target-specific local repository and creates consistent SQLite copies", async () => {
+    ensureRemoteResticInstalledMock.mockResolvedValue({
+      version: "0.19.1",
+      action: "already-installed",
+      resticPath: "/root/.baktime/bin/restic",
+    });
+    runRemoteCommandMock.mockImplementation(
+      async (_target: unknown, _command: string, args: string[]) => {
+        if (args[0] === "backup") return { stdout: summaryLine, stderr: "" };
+        if (args[1] === "PRAGMA integrity_check;") return { stdout: "ok\n", stderr: "" };
+        return { stdout: "[]", stderr: "" };
+      },
+    );
+
+    const localTarget = {
+      ...filesTarget,
+      paths: ["/opt/projects", "/cytrus"],
+      restic: {
+        backend: "local" as const,
+        repository: "/storage/backup/restic",
+        passwordSecretName: "RESTIC_PASSWORD",
+      },
+      sqliteBackups: [
+        {
+          source: "/var/lib/docker/volumes/cargo-db/_data/event_store.db",
+          destination: "/storage/.baktime-staging/cargo/event_store.db",
+        },
+      ],
+    };
+
+    await backupFilesTarget(localTarget, secrets, resticConfig);
+
+    expect(runRemoteCommandMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "mkdir",
+      ["-p", "/storage/backup/restic"],
+    );
+    expect(runRemoteCommandMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "sqlite3",
+      [
+        "/var/lib/docker/volumes/cargo-db/_data/event_store.db",
+        ".backup /storage/.baktime-staging/cargo/event_store.db",
+      ],
+    );
+    const backupCall = runRemoteCommandMock.mock.calls.find(
+      (call) => Array.isArray(call[2]) && call[2][0] === "backup",
+    );
+    expect(backupCall?.[2]).toEqual(
+      expect.arrayContaining([
+        "/opt/projects",
+        "/cytrus",
+        "/storage/.baktime-staging/cargo/event_store.db",
+      ]),
+    );
+    expect(backupCall?.[3]).toEqual({
+      env: {
+        RESTIC_REPOSITORY: "/storage/backup/restic",
+        RESTIC_PASSWORD: "hunter2",
+      },
+    });
+    expect(runRemoteCommandMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "rm",
+      ["-f", "/storage/.baktime-staging/cargo/event_store.db"],
+    );
   });
 
   it("propagates a bootstrap failure without attempting the backup", async () => {

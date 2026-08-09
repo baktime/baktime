@@ -109,6 +109,17 @@ filename, the restic `--tag`, and the workflow matrix id.
   "sshKeySecretName": "BAKTIME_TARGET_WEBSERVER1_SSH_KEY",
   "paths": ["/var/www", "/etc/nginx"],
   "excludes": ["*.log", "node_modules"],
+  "restic": {
+    "backend": "local",
+    "repository": "/storage/backup/restic",
+    "passwordSecretName": "RESTIC_PASSWORD"
+  },
+  "sqliteBackups": [
+    {
+      "source": "/var/lib/docker/volumes/app-db/_data/app.db",
+      "destination": "/storage/.baktime-staging/app/app.db"
+    }
+  ],
   "resticVersion": "0.19.1",
   "schedule": "0 3 * * *",
   "retention": { "keepDaily": 7 }
@@ -123,6 +134,15 @@ filename, the restic `--tag`, and the workflow matrix id.
   the pinned version in `src/restic/bootstrap-remote.ts`, `retention` falls
   back to `.baktimerc.yml`'s `defaults.retention`.
 - `schedule` is a standard cron expression, evaluated in UTC.
+- `restic` optionally overrides the instance-wide backend for this one files
+  target. This allows database targets to keep using R2 while a VPS files
+  target writes directly to an attached disk such as
+  `/storage/backup/restic`.
+- `sqliteBackups` creates transactionally consistent SQLite copies with the
+  SQLite online-backup command before restic runs, verifies each copy with
+  `PRAGMA integrity_check`, includes the copies in the snapshot, then removes
+  the staging files. Use this for live WAL-mode databases instead of backing
+  up `.db`/`.db-wal` files independently.
 
 ### `mysql` / `postgres` targets
 

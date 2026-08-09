@@ -8,7 +8,9 @@ name: Status site
 # described in ROADMAP.md's Phase 3 are still future work — this is
 # deliberately just the status page itself.
 #
-# Published as a plain build artifact, not deployed to GitHub Pages:
+# Published through the existing Cloudflare Worker (HTML stored in the same
+# KV namespace as the schedule manifest) and also retained as a build
+# artifact. It is not deployed to GitHub Pages:
 # GitHub Pages for a private repository needs GitHub Pro/Team/Enterprise
 # ("Your current plan does not support GitHub Pages for this repository."),
 # which this instance's plan doesn't have. If that changes (upgraded plan,
@@ -16,9 +18,7 @@ name: Status site
 # actions/upload-pages-artifact@v3 + a deploy job using actions/deploy-pages@v4
 # (needs `permissions: pages: write, id-token: write` and a `github-pages`
 # environment) — see the git history of this file in baktime/baktime for
-# the exact version this started as. Until then, self-host it (e.g. serve
-# `site/index.html` from your own reverse proxy) or just download the
-# artifact from this workflow's run summary.
+# the exact version this started as.
 on:
   push:
     branches: [main]
@@ -40,6 +40,16 @@ jobs:
         env:
           BAKTIME_SECRETS_JSON: ${{ toJSON(secrets) }}
         run: node dist/status/generate-site.js site
+      - name: Publish status page to the Cloudflare Worker KV
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >-
+          npx wrangler kv key put status-page
+          --path site/index.html
+          --binding BAKTIME_SCHEDULES
+          --config cloudflare-worker/wrangler.toml
+          --remote
       - uses: actions/upload-artifact@v4
         with:
           name: status-site

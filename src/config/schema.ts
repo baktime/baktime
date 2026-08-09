@@ -42,6 +42,44 @@ export const RetentionPolicySchema = z
   .strict();
 export type RetentionPolicy = z.infer<typeof RetentionPolicySchema>;
 
+function createResticBackendConfigSchema() {
+  return z
+    .object({
+      backend: z.enum(["r2", "s3", "local", "custom"]).default("r2"),
+      repository: z.string().min(1),
+      passwordSecretName: SecretNameSchema,
+      accessKeyIdSecretName: SecretNameSchema.optional(),
+      secretAccessKeySecretName: SecretNameSchema.optional(),
+    })
+    .strict()
+    .refine(
+      (config) =>
+        config.backend !== "r2" && config.backend !== "s3"
+          ? true
+          : Boolean(config.accessKeyIdSecretName && config.secretAccessKeySecretName),
+      {
+        message:
+          'accessKeyIdSecretName and secretAccessKeySecretName are required when backend is "r2" or "s3"',
+        path: ["accessKeyIdSecretName"],
+      },
+    );
+}
+
+export const ResticBackendConfigSchema = createResticBackendConfigSchema();
+export type ResticBackendConfig = z.infer<typeof ResticBackendConfigSchema>;
+
+export const SqliteBackupSchema = z
+  .object({
+    source: z.string().startsWith("/", "must be an absolute path"),
+    destination: z.string().startsWith("/", "must be an absolute path"),
+  })
+  .strict()
+  .refine((entry) => entry.source !== entry.destination, {
+    message: "source and destination must be different paths",
+    path: ["destination"],
+  });
+export type SqliteBackup = z.infer<typeof SqliteBackupSchema>;
+
 export const FilesTargetSchema = z
   .object({
     type: z.literal("files"),
@@ -51,6 +89,10 @@ export const FilesTargetSchema = z
     sshKeySecretName: SecretNameSchema,
     paths: z.array(z.string().min(1)).min(1),
     excludes: z.array(z.string().min(1)).optional(),
+    /** Optional target-specific backend, e.g. a local disk while DB targets keep using global R2. */
+    restic: ResticBackendConfigSchema.optional(),
+    /** Create transactionally consistent SQLite copies before restic snapshots the file tree. */
+    sqliteBackups: z.array(SqliteBackupSchema).optional(),
     resticVersion: z.string().min(1).optional(),
     schedule: CronScheduleSchema,
     retention: RetentionPolicySchema.optional(),
@@ -123,32 +165,6 @@ export type NamedTarget = Target & { name: string };
 export function withName<T extends Target>(target: T, name: string): T & { name: string } {
   return { ...target, name };
 }
-
-export const ResticBackendConfigSchema = z
-  .object({
-    backend: z.enum(["r2", "s3", "local", "custom"]).default("r2"),
-    repository: z.string().min(1),
-    passwordSecretName: SecretNameSchema,
-    // Optional: a "local" repository (a path on whatever host restic runs
-    // on — only meaningful for `files` targets, which run restic on the
-    // target host itself; see docs/config-reference.md) needs no S3-style
-    // credentials at all. "custom" may or may not need them depending on
-    // what it points at, so they stay optional there too.
-    accessKeyIdSecretName: SecretNameSchema.optional(),
-    secretAccessKeySecretName: SecretNameSchema.optional(),
-  })
-  .strict()
-  .refine(
-    (config) =>
-      config.backend !== "r2" && config.backend !== "s3"
-        ? true
-        : Boolean(config.accessKeyIdSecretName && config.secretAccessKeySecretName),
-    {
-      message: 'accessKeyIdSecretName and secretAccessKeySecretName are required when backend is "r2" or "s3"',
-      path: ["accessKeyIdSecretName"],
-    },
-  );
-export type ResticBackendConfig = z.infer<typeof ResticBackendConfigSchema>;
 
 export const StatusSiteConfigSchema = z
   .object({
