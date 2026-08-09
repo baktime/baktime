@@ -1,0 +1,61 @@
+name: Restore snapshot into a live target
+
+# Manual, destructive operation: pulls the latest --stdin database snapshot
+# tagged `from_tag` out of the restic repository and imports it into
+# `into_target`, overwriting that target's current live data (existing
+# tables are dropped first — see src/cli/restore-snapshot.ts). A fresh
+# backup of `into_target` is taken and committed immediately before the
+# overwrite, so it's always recoverable even if the tag/target was wrong.
+on:
+  workflow_dispatch:
+    inputs:
+      from_tag:
+        description: "Restic tag to restore from (usually the source target's name)"
+        required: true
+      into_target:
+        description: "Target name to overwrite (must be an existing mysql/postgres target)"
+        required: true
+
+# Shares backup.yml's group: both write/push history/*.yml, so they must
+# never race on the same commit.
+concurrency:
+  group: baktime-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install database client tools
+        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends default-mysql-client postgresql-client bzip2
+      - name: Safety backup of the target about to be overwritten
+        env:
+          BAKTIME_SECRETS_JSON: ${{ toJSON(secrets) }}
+          BAKTIME_SKIP_DUE_CHECK: "true"
+        run: node dist/cli/run-target.js "${{ github.event.inputs.into_target }}"
+      - name: Commit safety-backup history
+        run: |
+          git config user.name "baktime-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add history
+          if git diff --cached --quiet; then
+            echo "No history changes to commit"
+          else
+            git commit -m "chore(history): safety backup of ${{ github.event.inputs.into_target }} before restore"
+            git pull --rebase
+            git push
+          fi
+      - name: Restore snapshot
+        env:
+          BAKTIME_SECRETS_JSON: ${{ toJSON(secrets) }}
+        run: node dist/cli/restore-snapshot.js "${{ github.event.inputs.from_tag }}" "${{ github.event.inputs.into_target }}"

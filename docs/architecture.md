@@ -126,6 +126,22 @@ networking or hashing the way the remote/SSH bootstrap does) before any
 adapter — including the one-time repository-initialization step every run
 needs regardless of target type.
 
+### Restoring a database snapshot into a live target
+
+The `Restore snapshot into a live target` workflow
+(`.github/workflows/restore.yml`, `src/cli/restore-snapshot.ts`) is the
+inverse of the above: given a restic tag and a target name, it finds that
+tag's latest `--stdin` snapshot, `restic dump`s it back out, and pipes it
+straight into `mysql`/`psql` against the target — the same `spawnPipeline`
+plumbing as the backup path, just with restic and the DB client swapped as
+producer/consumer. It's manual (`workflow_dispatch` only) and destructive by
+design: it drops the target's existing tables first (a plain
+`mysqldump`/`pg_dump` doesn't emit its own `DROP` statements, so without
+this an import into a non-empty database would just fail on the first
+`CREATE TABLE`), which is why the workflow takes and commits a fresh backup
+of the target *before* running the restore — so a wrong tag or target name
+is always recoverable from history, not just theoretically.
+
 ## Command safety
 
 Every external process invocation (`ssh`, `restic`, and eventually
