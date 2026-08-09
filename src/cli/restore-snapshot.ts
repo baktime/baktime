@@ -1,10 +1,12 @@
 import { discoverTargets } from "../config/discover-targets.js";
 import { loadConfig } from "../config/load.js";
-import type { MysqlTarget, NamedTarget, PostgresTarget } from "../config/schema.js";
+import type { FilesTarget, MysqlTarget, NamedTarget, PostgresTarget } from "../config/schema.js";
 import { SecretsStore } from "../config/secrets.js";
 import { ensureLocalResticInstalled } from "../restic/bootstrap-local.js";
+import { ensureRemoteResticInstalled } from "../restic/bootstrap-remote.js";
 import { runLocalRestic } from "../restic/client.js";
 import { buildResticEnv } from "../restic/env.js";
+import { runRemoteCommand, type SshTarget } from "../ssh/connection.js";
 import { execFile, spawnPipeline } from "../util/exec.js";
 
 interface ResticLsEntry {
@@ -134,7 +136,7 @@ export const PSQL_IMPORT_SPEC: ImportSpec = {
 function importSpecFor(target: NamedTarget): ImportSpec {
   if (target.type === "mysql") return MYSQL_IMPORT_SPEC;
   if (target.type === "postgres") return PSQL_IMPORT_SPEC;
-  throw new Error(`Target "${target.name}" is a "${target.type}" target, not mysql/postgres — can't restore into it`);
+  throw new Error(`Target "${target.name}" is a "${target.type}" target — this branch only handles mysql/postgres`);
 }
 
 /**
@@ -146,17 +148,11 @@ function importSpecFor(target: NamedTarget): ImportSpec {
  * doesn't emit its own DROP statements), so this is a clean replace, not a
  * merge.
  */
-export async function restoreSnapshot(fromTag: string, intoTargetName: string): Promise<void> {
-  const secrets = SecretsStore.fromEnv();
-  const { targets, errors } = discoverTargets(secrets);
-  for (const error of errors) {
-    console.error(error.message);
-  }
-
-  const target = targets.find((candidate) => candidate.name === intoTargetName);
-  if (!target) {
-    throw new Error(`No valid target named "${intoTargetName}" was discovered`);
-  }
+async function restoreDatabaseSnapshot(
+  target: NamedTarget,
+  secrets: SecretsStore,
+  fromTag: string,
+): Promise<void> {
   const spec = importSpecFor(target);
   const dbTarget = target as (MysqlTarget | PostgresTarget) & { name: string };
   if (dbTarget.connection.mode !== "direct") {
@@ -208,6 +204,90 @@ export async function restoreSnapshot(fromTag: string, intoTargetName: string): 
     },
   );
   console.log(`Restore complete: "${fromTag}" -> "${target.name}"`);
+}
+
+/**
+ * Restores a "files" target's latest snapshot tagged `fromTag` — but,
+ * unlike the database path, NOT in place over the live tree. A files
+ * snapshot can span multiple original paths (e.g. both /opt/projects and a
+ * docker volume) and there's no equivalent of "drop the tables first" that
+ * makes a blind overwrite safe — silently clobbering live, possibly-running
+ * application files is a much worse failure mode than a database import
+ * hitting a duplicate-key error. Instead this restores into a fresh staging
+ * directory *on the same host* (restic runs there anyway, per
+ * adapters/files.ts) and prints its path — rolling back is then a deliberate
+ * `cp`/`rsync` from staging back over the live path, a human decision this
+ * tool doesn't make for you.
+ */
+async function restoreFilesSnapshot(
+  target: FilesTarget & { name: string },
+  secrets: SecretsStore,
+  fromTag: string,
+): Promise<void> {
+  const sshTarget: SshTarget = {
+    host: target.host,
+    user: target.sshUser,
+    port: target.sshPort,
+    privateKey: secrets.resolve(target.sshKeySecretName),
+  };
+  const bootstrap = await ensureRemoteResticInstalled(sshTarget, { version: target.resticVersion });
+
+  const config = loadConfig(process.env.BAKTIME_CONFIG_PATH ?? ".baktimerc.yml");
+  const resticEnv = buildResticEnv(config.restic, secrets);
+
+  const { stdout: snapshotsJson } = await runRemoteCommand(
+    sshTarget,
+    bootstrap.resticPath,
+    ["snapshots", "--tag", fromTag, "--json", "--latest", "1"],
+    { env: resticEnv },
+  );
+  const snapshots = JSON.parse(snapshotsJson) as ResticSnapshot[];
+  const snapshot = snapshots[0];
+  if (!snapshot?.short_id) {
+    throw new Error(`No snapshot found tagged "${fromTag}" in the restic repository`);
+  }
+  console.log(`Found snapshot ${snapshot.short_id} tagged "${fromTag}"`);
+
+  const restoreTo = `/storage/restore/${target.name}-${snapshot.short_id}`;
+  console.log(`Restoring snapshot ${snapshot.short_id} into staging directory ${restoreTo} on ${target.host}...`);
+  await runRemoteCommand(
+    sshTarget,
+    bootstrap.resticPath,
+    ["restore", snapshot.short_id, "--target", restoreTo],
+    { env: resticEnv },
+  );
+  console.log(
+    `Restore complete: "${fromTag}" -> ${target.host}:${restoreTo} (staged, not applied — the ` +
+      `original absolute paths are preserved under this directory, e.g. ` +
+      `${restoreTo}${target.paths[0] ?? "/..."}). Review it, then copy back over the live path ` +
+      `yourself once you're sure — this tool never overwrites live files automatically.`,
+  );
+}
+
+/**
+ * Restores `fromTag`'s latest snapshot into `intoTargetName`. Database
+ * targets (mysql/postgres) are restored in place, destructively — see
+ * restoreDatabaseSnapshot. Files targets are restored into a staging
+ * directory instead — see restoreFilesSnapshot for why an in-place restore
+ * isn't offered here.
+ */
+export async function restoreSnapshot(fromTag: string, intoTargetName: string): Promise<void> {
+  const secrets = SecretsStore.fromEnv();
+  const { targets, errors } = discoverTargets(secrets);
+  for (const error of errors) {
+    console.error(error.message);
+  }
+
+  const target = targets.find((candidate) => candidate.name === intoTargetName);
+  if (!target) {
+    throw new Error(`No valid target named "${intoTargetName}" was discovered`);
+  }
+
+  if (target.type === "files") {
+    await restoreFilesSnapshot(target, secrets, fromTag);
+  } else {
+    await restoreDatabaseSnapshot(target, secrets, fromTag);
+  }
 }
 
 async function main(): Promise<void> {

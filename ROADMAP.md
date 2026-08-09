@@ -7,28 +7,24 @@ backup path (direct or SSH-tunnel connection, dump streamed straight into
 `restic backup --stdin` on the runner), a local-filesystem restic backend
 option (files targets only), history, Discord backup success/failure
 notifications (secrets-driven, upptime-style config — see
-`docs/secrets.md#notifications`), the
-`backup.yml`/`sync-cloudflare-schedule.yml`/`ci.yml`/`deploy-cloudflare-worker.yml`
+`docs/secrets.md#notifications`), a restore path for both database targets
+(in-place, destructive, safety-backed-up first) and files targets (restored
+into a staging directory — see `docs/rollback.md`), a status page presenting
+every target's health and recent runs (`site.yml`, `src/status/generate-site.ts`,
+deployed to GitHub Pages), the
+`backup.yml`/`sync-cloudflare-schedule.yml`/`ci.yml`/`deploy-cloudflare-worker.yml`/`restore.yml`/`site.yml`
 workflows, and the schedule-aware Cloudflare Worker. See
 `docs/architecture.md` for how it all fits together.
 
 Everything below is designed for (schema/workflow shape already exists as
 placeholders where relevant) but not implemented.
 
-## Phase 3 — History, status site, pruning
+## Phase 3 — Trend graphs, pruning
 
-- `src/status/generate-api.ts`: reads all `history/*.yml`, computes
-  per-target health (`healthy | late | failing` based on last-run age vs.
-  schedule), writes `api/summary.json` and `api/<target>.json`.
 - `src/status/generate-graphs.ts`: size/duration trend series per target,
   written as JSON for a client-side chart rather than server-rendered
-  images (no headless-canvas dependency in CI).
-- `status-site/`: a small Vite + vanilla TS (or Preact) static site reading
-  the generated `api/*.json`/`graphs/*.json` — **not** a fork of upptime's
-  Svelte site, since its data model (response times, up/down) doesn't map
-  onto backup-shaped data (last-run age, byte deltas, restore-verified
-  status) closely enough to be worth inheriting its build tooling. Deployed
-  via `site.yml` to GitHub Pages.
+  images (no headless-canvas dependency in CI), rendered into the status
+  site built by `site.yml`.
 - `prune.yml`: for each target's `retention` policy, `restic forget
   --prune --tag <name>` then `restic check`; writes a `prune`-type history
   record; opens an issue on `check` failure (ties into Phase 5's issue

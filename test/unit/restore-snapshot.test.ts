@@ -1,5 +1,41 @@
-import { describe, expect, it } from "vitest";
-import { findSoleFilePath, MYSQL_IMPORT_SPEC, PSQL_IMPORT_SPEC } from "../../src/cli/restore-snapshot.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const discoverTargetsMock = vi.fn();
+vi.mock("../../src/config/discover-targets.js", () => ({
+  discoverTargets: (...args: unknown[]) => discoverTargetsMock(...args),
+}));
+
+const loadConfigMock = vi.fn();
+vi.mock("../../src/config/load.js", () => ({
+  loadConfig: (...args: unknown[]) => loadConfigMock(...args),
+}));
+
+const secretsResolveMock = vi.fn();
+vi.mock("../../src/config/secrets.js", () => ({
+  SecretsStore: { fromEnv: () => ({ resolve: (...args: unknown[]) => secretsResolveMock(...args) }) },
+}));
+
+const buildResticEnvMock = vi.fn();
+vi.mock("../../src/restic/env.js", () => ({
+  buildResticEnv: (...args: unknown[]) => buildResticEnvMock(...args),
+}));
+
+const ensureRemoteResticInstalledMock = vi.fn();
+vi.mock("../../src/restic/bootstrap-remote.js", () => ({
+  ensureRemoteResticInstalled: (...args: unknown[]) => ensureRemoteResticInstalledMock(...args),
+}));
+
+const runRemoteCommandMock = vi.fn();
+vi.mock("../../src/ssh/connection.js", () => ({
+  runRemoteCommand: (...args: unknown[]) => runRemoteCommandMock(...args),
+}));
+
+const {
+  findSoleFilePath,
+  MYSQL_IMPORT_SPEC,
+  PSQL_IMPORT_SPEC,
+  restoreSnapshot,
+} = await import("../../src/cli/restore-snapshot.js");
 
 describe("findSoleFilePath", () => {
   it("returns the path of the single file entry", () => {
@@ -71,5 +107,59 @@ describe("PSQL_IMPORT_SPEC", () => {
     expect(PSQL_IMPORT_SPEC.buildImportArgs("psql01.mikr.us", 5432, "wanda192", "db_wanda192")).toEqual(
       expect.arrayContaining(["-v", "ON_ERROR_STOP=1"]),
     );
+  });
+});
+
+describe("restoreSnapshot > files targets", () => {
+  beforeEach(() => {
+    loadConfigMock.mockReturnValue({ restic: { backend: "local", repository: "/storage/backup" } });
+    buildResticEnvMock.mockReturnValue({ RESTIC_REPOSITORY: "/storage/backup", RESTIC_PASSWORD: "secret" });
+    secretsResolveMock.mockReturnValue("resolved-secret");
+    ensureRemoteResticInstalledMock.mockResolvedValue({ resticPath: "/home/user/.baktime/bin/restic", action: "already-installed" });
+    discoverTargetsMock.mockReturnValue({
+      errors: [],
+      targets: [
+        {
+          type: "files",
+          name: "wanda-vps-local",
+          host: "wanda192.mikrus.xyz",
+          sshUser: "root",
+          sshPort: 10192,
+          sshKeySecretName: "BAKTIME_TARGET_WANDA_VPS_LOCAL_SSH_KEY",
+          paths: ["/opt/projects", "/cytrus"],
+          schedule: "0 2 * * *",
+        },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("restores into a staging directory rather than in place, and never touches a DB client", async () => {
+    runRemoteCommandMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify([{ short_id: "abc1234" }]), stderr: "" }) // snapshots
+      .mockResolvedValueOnce({ stdout: "", stderr: "" }); // restore
+
+    await restoreSnapshot("wanda-vps-local", "wanda-vps-local");
+
+    expect(runRemoteCommandMock).toHaveBeenCalledTimes(2);
+    expect(runRemoteCommandMock).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.anything(),
+      ["restore", "abc1234", "--target", "/storage/restore/wanda-vps-local-abc1234"],
+      expect.anything(),
+    );
+  });
+
+  it("throws a clear error when no snapshot matches the tag, instead of restoring nothing", async () => {
+    runRemoteCommandMock.mockResolvedValueOnce({ stdout: "[]", stderr: "" });
+
+    await expect(restoreSnapshot("wanda-vps-local", "wanda-vps-local")).rejects.toThrow(
+      /No snapshot found tagged "wanda-vps-local"/,
+    );
+    expect(runRemoteCommandMock).toHaveBeenCalledTimes(1); // never attempts the restore itself
   });
 });

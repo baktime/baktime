@@ -1,12 +1,52 @@
-name: Status site (Phase 3 — not implemented yet)
+name: Status site
 
-# Will build status-site/ (reading api/*.json generated from history/) and
-# deploy it to GitHub Pages. See ROADMAP.md, Phase 3.
+# Builds a static page presenting every target's health (healthy/late/
+# failing/never-run) and recent run history, from history/*.yml plus each
+# target's live schedule (src/status/generate-site.ts), and deploys it to
+# GitHub Pages. Fires after every history commit so it stays current with
+# no extra step in backup.yml/restore.yml. The size/duration trend graphs
+# and pruning described in ROADMAP.md's Phase 3 are still future work — this
+# is deliberately just the status page itself.
 on:
+  push:
+    branches: [main]
+    paths: ["history/**"]
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 jobs:
-  placeholder:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "site.yml is a placeholder — see ROADMAP.md, Phase 3"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Generate site
+        env:
+          BAKTIME_SECRETS_JSON: ${{ toJSON(secrets) }}
+        run: node dist/status/generate-site.js site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -57,6 +57,7 @@ See [`docs/getting-started.md`](docs/getting-started.md).
 - [`docs/config-reference.md`](docs/config-reference.md) — `.baktimerc.yml` and target JSON reference
 - [`docs/secrets.md`](docs/secrets.md) — exactly which secrets to create and how to scope them
 - [`docs/architecture.md`](docs/architecture.md) — the full design, and why it differs from upptime where it does
+- [`docs/rollback.md`](docs/rollback.md) — how to restore a previous snapshot, for both database and files targets
 - [`ROADMAP.md`](ROADMAP.md) — what's built vs. designed-but-not-yet-built
 
 ---
