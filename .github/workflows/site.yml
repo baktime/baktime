@@ -2,25 +2,28 @@ name: Status site
 
 # Builds a static page presenting every target's health (healthy/late/
 # failing/never-run) and recent run history, from history/*.yml plus each
-# target's live schedule (src/status/generate-site.ts), and deploys it to
-# GitHub Pages. Fires after every history commit so it stays current with
-# no extra step in backup.yml/restore.yml. The size/duration trend graphs
-# and pruning described in ROADMAP.md's Phase 3 are still future work — this
-# is deliberately just the status page itself.
+# target's live schedule (src/status/generate-site.ts). Fires after every
+# history commit so it stays current with no extra step in
+# backup.yml/restore.yml. The size/duration trend graphs and pruning
+# described in ROADMAP.md's Phase 3 are still future work — this is
+# deliberately just the status page itself.
+#
+# Published as a plain build artifact, not deployed to GitHub Pages:
+# GitHub Pages for a private repository needs GitHub Pro/Team/Enterprise
+# ("Your current plan does not support GitHub Pages for this repository."),
+# which this instance's plan doesn't have. If that changes (upgraded plan,
+# or the repo goes public), swap the last step for
+# actions/upload-pages-artifact@v3 + a deploy job using actions/deploy-pages@v4
+# (needs `permissions: pages: write, id-token: write` and a `github-pages`
+# environment) — see the git history of this file in baktime/baktime for
+# the exact version this started as. Until then, self-host it (e.g. serve
+# `site/index.html` from your own reverse proxy) or just download the
+# artifact from this workflow's run summary.
 on:
   push:
     branches: [main]
     paths: ["history/**"]
   workflow_dispatch: {}
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
   build:
@@ -37,16 +40,7 @@ jobs:
         env:
           BAKTIME_SECRETS_JSON: ${{ toJSON(secrets) }}
         run: node dist/status/generate-site.js site
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
+          name: status-site
           path: site
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4

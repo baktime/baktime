@@ -11,7 +11,9 @@ notifications (secrets-driven, upptime-style config — see
 (in-place, destructive, safety-backed-up first) and files targets (restored
 into a staging directory — see `docs/rollback.md`), a status page presenting
 every target's health and recent runs (`site.yml`, `src/status/generate-site.ts`,
-deployed to GitHub Pages), the
+published as a build artifact — GitHub Pages needs a paid plan for a
+private repo, see `site.yml`'s comments for the swap-back path once that's
+available), the
 `backup.yml`/`sync-cloudflare-schedule.yml`/`ci.yml`/`deploy-cloudflare-worker.yml`/`restore.yml`/`site.yml`
 workflows, and the schedule-aware Cloudflare Worker. See
 `docs/architecture.md` for how it all fits together.
