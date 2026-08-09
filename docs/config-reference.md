@@ -186,3 +186,15 @@ themselves. A secret that *does* parse as target-shaped JSON but fails
 schema validation is reported as an error, not silently skipped, since a
 silently-dropped target means backups silently stop. See
 `src/config/discover-targets.ts`.
+
+**Don't name a target after one of its own credential values.** GitHub
+Actions masks any log/output text that matches a registered secret's exact
+value, anywhere it appears — including as a substring. `<NAME>` becomes
+part of `discover-due-targets.yml`'s `due` job output (the list fed into
+the backup matrix), so if, say, your DB username secret's value is
+`wanda192` and you name the target `wanda192-mysql`, GitHub silently drops
+that entire output ("Skip output 'due' since it may contain secret") — the
+matrix ends up empty, and the whole `Backup` workflow run fails with no
+target-level error to point at. Pick a target name that doesn't literally
+contain any of its secrets' values (e.g. `wanda-mysql` instead of
+`wanda192-mysql`).
