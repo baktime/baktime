@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   buildDiscordPayload,
+  buildWeeklyDiscordPayload,
   createDiscordChannel,
   formatBytes,
   formatDuration,
@@ -85,6 +86,108 @@ describe("buildDiscordPayload", () => {
     const errorField = payload.embeds[0]!.fields.find((f) => f.name === "Error")!;
     expect(errorField.value.length).toBeLessThanOrEqual(1000);
     expect(errorField.value.endsWith("…")).toBe(true);
+  });
+});
+
+describe("buildWeeklyDiscordPayload", () => {
+  it("renders repository totals, weekly outcomes, and every target state", () => {
+    const payload = buildWeeklyDiscordPayload({
+      kind: "weekly-summary",
+      generatedAt: "2026-08-21T08:17:00.000Z",
+      periodStart: "2026-08-14T08:17:00.000Z",
+      repository: {
+        storageBytes: 1_073_741_824,
+        snapshots: 12,
+        files: 345,
+        checked: 1,
+        unavailable: 0,
+      },
+      totals: {
+        targets: 2,
+        healthy: 1,
+        late: 0,
+        failing: 1,
+        neverRun: 0,
+        successfulBackups: 12,
+        successesThisWeek: 5,
+        failuresThisWeek: 1,
+      },
+      targets: [
+        {
+          name: "database",
+          type: "postgres",
+          schedule: "0 5 * * *",
+          health: "healthy",
+          lastRunAt: "2026-08-21T05:00:00.000Z",
+          lastRunStatus: "success",
+          successfulBackups: 7,
+          successesThisWeek: 3,
+          failuresThisWeek: 0,
+        },
+        {
+          name: "files",
+          type: "files",
+          schedule: "0 3 * * *",
+          health: "failing",
+          lastRunAt: "2026-08-21T03:00:00.000Z",
+          lastRunStatus: "failure",
+          successfulBackups: 5,
+          successesThisWeek: 2,
+          failuresThisWeek: 1,
+        },
+      ],
+    }) as { embeds: { title: string; color: number; fields: { name: string; value: string }[] }[] };
+
+    const embed = payload.embeds[0]!;
+    expect(embed.title).toContain("needs attention");
+    expect(embed.color).toBe(0xe74c3c);
+    expect(embed.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Repository storage", value: expect.stringContaining("1.0 GB") }),
+        expect.objectContaining({ name: "Last 7 days", value: "5 succeeded · 1 failed" }),
+        expect.objectContaining({ name: "All targets", value: expect.stringContaining("database") }),
+      ]),
+    );
+    expect(embed.fields.find((field) => field.name === "All targets")?.value).toContain("files");
+  });
+
+  it("splits a large target list across valid-sized continuation embeds", () => {
+    const targets = Array.from({ length: 80 }, (_, index) => ({
+      name: `target-${String(index).padStart(2, "0")}`,
+      type: "files" as const,
+      schedule: "0 3 * * *",
+      health: "healthy" as const,
+      lastRunAt: "2026-08-21T03:00:00.000Z",
+      lastRunStatus: "success" as const,
+      successfulBackups: 12,
+      successesThisWeek: 7,
+      failuresThisWeek: 0,
+    }));
+    const payload = buildWeeklyDiscordPayload({
+      kind: "weekly-summary",
+      generatedAt: "2026-08-21T08:17:00.000Z",
+      periodStart: "2026-08-14T08:17:00.000Z",
+      repository: { storageBytes: 1, snapshots: 80, files: 80, checked: 1, unavailable: 0 },
+      totals: {
+        targets: 80,
+        healthy: 80,
+        late: 0,
+        failing: 0,
+        neverRun: 0,
+        successfulBackups: 960,
+        successesThisWeek: 560,
+        failuresThisWeek: 0,
+      },
+      targets,
+    }) as { embeds: { fields: { value: string }[] }[] };
+
+    expect(payload.embeds.length).toBeGreaterThan(1);
+    expect(payload.embeds.length).toBeLessThanOrEqual(10);
+    for (const embed of payload.embeds) {
+      expect(embed.fields.length).toBeGreaterThan(0);
+      expect(embed.fields.every((field) => field.value.length <= 1000)).toBe(true);
+    }
+    expect(JSON.stringify(payload)).toContain("target-79");
   });
 });
 

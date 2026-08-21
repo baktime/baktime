@@ -88,11 +88,23 @@ channels — nothing in `.baktimerc.yml` beyond the optional, non-authoritative
 | `NOTIFICATION_DISCORD_WEBHOOK_URL` | yes | A Discord webhook URL — create one in your server under *Channel Settings → Integrations → Webhooks*. |
 
 Sends a color-coded embed on every backup attempt: green with the snapshot
-id and data size on success, red with the error message on failure (see
-`src/notifications/discord.ts`). If `NOTIFICATION_DISCORD` is `"true"` but
+id and data size on success, red with the error message on failure. It also
+sends a weekly aggregate report every Monday at 08:17 UTC with every
+target's schedule-aware health, retained snapshot and file counts, raw
+repository storage after deduplication, total recorded backups, and the
+last seven days' successes/failures. Run `summary.yml` manually from the
+Actions tab to test it immediately (see `src/notifications/discord.ts`). If
+`NOTIFICATION_DISCORD` is `"true"` but
 the webhook URL secret is missing, baktime logs a clear warning and skips
 Discord rather than failing the backup itself — a notification channel
 being unreachable must never be mistaken for the backup having failed.
+
+Repository totals are collected with `restic stats --mode raw-data`. If one
+configured repository is temporarily unreachable, the report still sends
+the totals it could collect and marks the missing repository count. Local
+repositories are inspected over the corresponding files target's SSH
+connection; network repositories such as R2/S3 are inspected once from the
+Actions runner.
 
 ### Future providers
 

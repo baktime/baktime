@@ -41,10 +41,10 @@ offer no shell access to install anything on.
 Built: config schema, secrets-driven dynamic target discovery, cron-based
 scheduling, complete `files` and `mysql`/`postgres` backup paths end to
 end, a local-filesystem restic backend option, Discord backup
-success/failure notifications (more providers to come — configured the
-same secrets-driven way as everything else), and the schedule-aware
-Cloudflare Worker. The status site, retention/pruning, and restore
-verification are designed but not yet built — see
+success/failure notifications plus a weekly aggregate health/storage report
+(more providers to come — configured the same secrets-driven way as
+everything else), a status site, and the schedule-aware Cloudflare Worker.
+Retention/pruning and restore verification are designed but not yet built — see
 [`ROADMAP.md`](ROADMAP.md).
 
 ## Getting started

@@ -13,8 +13,9 @@ into a staging directory — see `docs/rollback.md`), a status page presenting
 every target's health and recent runs (`site.yml`, `src/status/generate-site.ts`,
 published as a build artifact — GitHub Pages needs a paid plan for a
 private repo, see `site.yml`'s comments for the swap-back path once that's
-available), the
-`backup.yml`/`sync-cloudflare-schedule.yml`/`ci.yml`/`deploy-cloudflare-worker.yml`/`restore.yml`/`site.yml`
+available), a weekly aggregate notification covering target health, retained
+snapshot/file counts, repository storage, and seven-day outcomes, the
+`backup.yml`/`sync-cloudflare-schedule.yml`/`ci.yml`/`deploy-cloudflare-worker.yml`/`restore.yml`/`site.yml`/`summary.yml`
 workflows, and the schedule-aware Cloudflare Worker. See
 `docs/architecture.md` for how it all fits together.
 
@@ -52,7 +53,7 @@ across restarts, KV eventual-consistency edge cases, and Worker redeploys.
   `restoreVerified: { at, snapshotId, ok, detail }` — surfaced on the
   status site as "last verified restore", since a backup that's never been
   test-restored can look "healthy" indefinitely on backup-success alone.
-- `summary.yml`: re-derives health per target from `api/*.json`, opens a
+- Extend `summary.yml`: re-derive incident transitions per target and open a
   labeled GitHub Issue on a healthy→failing transition (with a link to the
   failing run), comments "resolved" and closes it on failing→healthy —
   directly mirroring upptime's incident-issue automation. A restore-drill

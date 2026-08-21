@@ -1,6 +1,6 @@
 import type { SecretsStore } from "../config/secrets.js";
 import { createDiscordChannel } from "./discord.js";
-import type { BackupNotificationEvent, NotificationChannel } from "./types.js";
+import type { NotificationChannel, NotificationEvent } from "./types.js";
 
 /**
  * Mirrors upptime's own notification config convention exactly: a provider
@@ -43,7 +43,7 @@ export function discoverNotificationChannels(secrets: SecretsStore): Notificatio
  */
 export async function notifyAll(
   channels: readonly NotificationChannel[],
-  event: BackupNotificationEvent,
+  event: NotificationEvent,
 ): Promise<void> {
   const results = await Promise.allSettled(channels.map((channel) => channel.send(event)));
   for (const [index, result] of results.entries()) {

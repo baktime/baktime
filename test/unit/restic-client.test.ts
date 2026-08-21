@@ -11,8 +11,10 @@ const {
   buildCheckArgs,
   buildInitArgs,
   buildSnapshotsArgs,
+  buildStatsArgs,
   ensureRepositoryInitialized,
   parseBackupSummary,
+  parseResticStats,
 } = await import("../../src/restic/client.js");
 
 const env = {
@@ -48,6 +50,10 @@ describe("argument builders", () => {
 
   it("buildCheckArgs", () => {
     expect(buildCheckArgs()).toEqual(["check"]);
+  });
+
+  it("buildStatsArgs requests deduplicated raw repository data as JSON", () => {
+    expect(buildStatsArgs()).toEqual(["stats", "--mode", "raw-data", "--json"]);
   });
 
   it("buildBackupArgs with excludes", () => {
@@ -90,6 +96,29 @@ describe("argument builders", () => {
       "--stdin-filename",
       "shop-2026-08-08.sql",
     ]);
+  });
+});
+
+describe("parseResticStats", () => {
+  it("extracts repository storage, file, and snapshot totals", () => {
+    expect(
+      parseResticStats(
+        JSON.stringify({
+          total_size: 123456,
+          total_file_count: 42,
+          total_blob_count: 99,
+          snapshots_count: 7,
+        }),
+      ),
+    ).toEqual({ totalSize: 123456, totalFileCount: 42, snapshotsCount: 7 });
+  });
+
+  it("rejects malformed or incomplete statistics", () => {
+    expect(() => parseResticStats("not-json")).toThrow(/valid JSON/);
+    expect(() => parseResticStats(JSON.stringify({ total_size: -1 }))).toThrow(/total_size/);
+    expect(() =>
+      parseResticStats(JSON.stringify({ total_size: 1, total_file_count: 2 })),
+    ).toThrow(/snapshots_count/);
   });
 });
 

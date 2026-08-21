@@ -1,13 +1,30 @@
-name: Summary and incident issues (Phase 5 — not implemented yet)
+name: Weekly backup summary
 
-# Will open/update/close a labeled GitHub Issue per target on health
-# transitions (healthy -> failing -> resolved), mirroring upptime's incident
-# automation. See ROADMAP.md, Phase 5.
+# Sends one aggregate report every Monday. The off-hour minute reduces the
+# chance of GitHub's documented top-of-hour schedule delays. workflow_dispatch
+# provides an immediate setup/test path after configuring notifications.
 on:
+  schedule:
+    - cron: "17 8 * * 1"
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
 jobs:
-  placeholder:
+  notify:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "summary.yml is a placeholder — see ROADMAP.md, Phase 5"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install restic decompression dependency
+        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends bzip2
+      - name: Send weekly summary
+        env:
+          BAKTIME_SECRETS_JSON: ${{ toJSON(secrets) }}
+        run: node dist/cli/send-weekly-summary.js

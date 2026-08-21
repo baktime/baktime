@@ -24,6 +24,21 @@ export function buildCheckArgs(): string[] {
   return ["check"];
 }
 
+/**
+ * `raw-data` counts each stored blob once, so the result reflects the
+ * repository data retained after restic's deduplication rather than the
+ * much larger sum of every snapshot's restore size.
+ */
+export function buildStatsArgs(): string[] {
+  return ["stats", "--mode", "raw-data", "--json"];
+}
+
+export interface ResticStats {
+  totalSize: number;
+  totalFileCount: number;
+  snapshotsCount: number;
+}
+
 export interface BackupArgsOptions {
   tag: string;
   excludes?: string[];
@@ -104,6 +119,32 @@ export interface BackupSummary {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function requiredNonNegativeNumber(record: Record<string, unknown>, key: string): number {
+  const value = record[key];
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`restic stats output has an invalid ${key}`);
+  }
+  return value;
+}
+
+/** Parses the single JSON object emitted by `restic stats --json`. */
+export function parseResticStats(stdout: string): ResticStats {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch (cause) {
+    throw new Error("restic stats output is not valid JSON", { cause });
+  }
+  if (!isRecord(parsed)) {
+    throw new Error("restic stats output must be a JSON object");
+  }
+  return {
+    totalSize: requiredNonNegativeNumber(parsed, "total_size"),
+    totalFileCount: requiredNonNegativeNumber(parsed, "total_file_count"),
+    snapshotsCount: requiredNonNegativeNumber(parsed, "snapshots_count"),
+  };
 }
 
 /**
