@@ -98,7 +98,6 @@ describe("buildWeeklyDiscordPayload", () => {
       repository: {
         storageBytes: 1_073_741_824,
         snapshots: 12,
-        files: 345,
         checked: 1,
         unavailable: 0,
       },
@@ -167,7 +166,7 @@ describe("buildWeeklyDiscordPayload", () => {
       kind: "weekly-summary",
       generatedAt: "2026-08-21T08:17:00.000Z",
       periodStart: "2026-08-14T08:17:00.000Z",
-      repository: { storageBytes: 1, snapshots: 80, files: 80, checked: 1, unavailable: 0 },
+      repository: { storageBytes: 1, snapshots: 80, checked: 1, unavailable: 0 },
       totals: {
         targets: 80,
         healthy: 80,

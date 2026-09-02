@@ -112,7 +112,6 @@ export async function collectRepositorySummary(
   const summary: RepositorySummary = {
     storageBytes: 0,
     snapshots: 0,
-    files: 0,
     checked: 0,
     unavailable: 0,
   };
@@ -120,7 +119,6 @@ export async function collectRepositorySummary(
     if (result.status === "fulfilled") {
       summary.storageBytes += result.value.totalSize;
       summary.snapshots += result.value.snapshotsCount;
-      summary.files += result.value.totalFileCount;
       summary.checked += 1;
       return;
     }

@@ -100,25 +100,24 @@ describe("argument builders", () => {
 });
 
 describe("parseResticStats", () => {
-  it("extracts repository storage, file, and snapshot totals", () => {
+  it("extracts repository storage and snapshot totals from raw-data mode output", () => {
+    // `--mode raw-data` (the only mode buildStatsArgs uses) never emits
+    // total_file_count — only restore-size/files-by-contents/blobs-per-file do.
     expect(
       parseResticStats(
         JSON.stringify({
           total_size: 123456,
-          total_file_count: 42,
           total_blob_count: 99,
           snapshots_count: 7,
         }),
       ),
-    ).toEqual({ totalSize: 123456, totalFileCount: 42, snapshotsCount: 7 });
+    ).toEqual({ totalSize: 123456, snapshotsCount: 7 });
   });
 
   it("rejects malformed or incomplete statistics", () => {
     expect(() => parseResticStats("not-json")).toThrow(/valid JSON/);
     expect(() => parseResticStats(JSON.stringify({ total_size: -1 }))).toThrow(/total_size/);
-    expect(() =>
-      parseResticStats(JSON.stringify({ total_size: 1, total_file_count: 2 })),
-    ).toThrow(/snapshots_count/);
+    expect(() => parseResticStats(JSON.stringify({ total_size: 1 }))).toThrow(/snapshots_count/);
   });
 });
 

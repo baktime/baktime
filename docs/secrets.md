@@ -90,9 +90,9 @@ channels — nothing in `.baktimerc.yml` beyond the optional, non-authoritative
 Sends a color-coded embed on every backup attempt: green with the snapshot
 id and data size on success, red with the error message on failure. It also
 sends a weekly aggregate report every Monday at 08:17 UTC with every
-target's schedule-aware health, retained snapshot and file counts, raw
-repository storage after deduplication, total recorded backups, and the
-last seven days' successes/failures. Run `summary.yml` manually from the
+target's schedule-aware health, retained snapshot counts, raw repository
+storage after deduplication, total recorded backups, and the last seven
+days' successes/failures. Run `summary.yml` manually from the
 Actions tab to test it immediately (see `src/notifications/discord.ts`). If
 `NOTIFICATION_DISCORD` is `"true"` but
 the webhook URL secret is missing, baktime logs a clear warning and skips

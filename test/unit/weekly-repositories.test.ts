@@ -66,11 +66,11 @@ beforeEach(() => {
 describe("collectRepositorySummary", () => {
   it("deduplicates shared network and host-local repositories and sums their stats", async () => {
     runLocalResticMock.mockResolvedValue({
-      stdout: JSON.stringify({ totalSize: 1000, totalFileCount: 20, snapshotsCount: 3 }),
+      stdout: JSON.stringify({ totalSize: 1000, snapshotsCount: 3 }),
       stderr: "",
     });
     runRemoteCommandMock.mockResolvedValue({
-      stdout: JSON.stringify({ totalSize: 500, totalFileCount: 10, snapshotsCount: 2 }),
+      stdout: JSON.stringify({ totalSize: 500, snapshotsCount: 2 }),
       stderr: "",
     });
     const targets: NamedTarget[] = [
@@ -84,7 +84,6 @@ describe("collectRepositorySummary", () => {
     await expect(collectRepositorySummary(targets, globalConfig, secrets)).resolves.toEqual({
       storageBytes: 1500,
       snapshots: 5,
-      files: 30,
       checked: 2,
       unavailable: 0,
     });
@@ -95,7 +94,7 @@ describe("collectRepositorySummary", () => {
   it("keeps successful totals when another repository cannot be inspected", async () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     runLocalResticMock.mockResolvedValue({
-      stdout: JSON.stringify({ totalSize: 1000, totalFileCount: 20, snapshotsCount: 3 }),
+      stdout: JSON.stringify({ totalSize: 1000, snapshotsCount: 3 }),
       stderr: "",
     });
     runRemoteCommandMock.mockRejectedValue(new Error("host unreachable"));
@@ -109,7 +108,6 @@ describe("collectRepositorySummary", () => {
     expect(result).toEqual({
       storageBytes: 1000,
       snapshots: 3,
-      files: 20,
       checked: 1,
       unavailable: 1,
     });

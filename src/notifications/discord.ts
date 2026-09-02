@@ -124,7 +124,7 @@ export function buildWeeklyDiscordPayload(
       name: "Repository storage",
       value:
         repository.checked > 0
-          ? `${formatBytes(repository.storageBytes)} raw data · ${repository.snapshots} snapshots · ${repository.files} files${repositoryNote}`
+          ? `${formatBytes(repository.storageBytes)} raw data · ${repository.snapshots} snapshots${repositoryNote}`
           : `Unavailable${repositoryNote}`,
       inline: false,
     },

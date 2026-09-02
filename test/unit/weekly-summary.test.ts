@@ -55,7 +55,6 @@ describe("buildWeeklySummary", () => {
     const repository = {
       storageBytes: 10_000,
       snapshots: 4,
-      files: 100,
       checked: 1,
       unavailable: 0,
     };
@@ -91,7 +90,7 @@ describe("buildWeeklySummary", () => {
     const summary = buildWeeklySummary(
       [],
       new Map(),
-      { storageBytes: 0, snapshots: 0, files: 0, checked: 0, unavailable: 0 },
+      { storageBytes: 0, snapshots: 0, checked: 0, unavailable: 0 },
       NOW,
     );
     expect(summary.totals.targets).toBe(0);

@@ -35,7 +35,6 @@ export function buildStatsArgs(): string[] {
 
 export interface ResticStats {
   totalSize: number;
-  totalFileCount: number;
   snapshotsCount: number;
 }
 
@@ -129,7 +128,12 @@ function requiredNonNegativeNumber(record: Record<string, unknown>, key: string)
   return value;
 }
 
-/** Parses the single JSON object emitted by `restic stats --json`. */
+/**
+ * Parses the single JSON object emitted by `restic stats --json`. Only
+ * fields common to every `--mode` are read — in particular `raw-data` mode
+ * (the only mode this codebase uses, see `buildStatsArgs`) never emits
+ * `total_file_count`, so that field isn't parsed here.
+ */
 export function parseResticStats(stdout: string): ResticStats {
   let parsed: unknown;
   try {
@@ -142,7 +146,6 @@ export function parseResticStats(stdout: string): ResticStats {
   }
   return {
     totalSize: requiredNonNegativeNumber(parsed, "total_size"),
-    totalFileCount: requiredNonNegativeNumber(parsed, "total_file_count"),
     snapshotsCount: requiredNonNegativeNumber(parsed, "snapshots_count"),
   };
 }

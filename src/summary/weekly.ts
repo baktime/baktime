@@ -9,7 +9,6 @@ export interface RepositorySummary {
   /** Sum of raw-data bytes across every repository that could be inspected. */
   storageBytes: number;
   snapshots: number;
-  files: number;
   checked: number;
   unavailable: number;
 }
