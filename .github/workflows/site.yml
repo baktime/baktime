@@ -4,9 +4,9 @@ name: Status site
 # failing/never-run) and recent run history, from history/*.yml plus each
 # target's live schedule (src/status/generate-site.ts). Fires after every
 # history commit so it stays current with no extra step in
-# backup.yml/restore.yml. The size/duration trend graphs and pruning
-# described in ROADMAP.md's Phase 3 are still future work — this is
-# deliberately just the status page itself.
+# backup.yml/restore.yml. The size/duration trend graphs described in
+# ROADMAP.md's Phase 3 are still future work — this is deliberately just
+# the status page itself.
 #
 # Published through the existing Cloudflare Worker (HTML stored in the same
 # KV namespace as the schedule manifest) and also retained as a build

@@ -9,8 +9,8 @@ compatibility_date = "2024-09-23"
 crons = ["*/5 * * * *"]
 
 [vars]
-GITHUB_OWNER = "REPLACE_ME" # e.g. "mleczakm" — the instance repo's owner
-GITHUB_REPO = "REPLACE_ME"  # e.g. "backup" — the instance repo's name
+GITHUB_OWNER = "REPLACE_ME" # e.g. "your-github-user" — the instance repo's owner
+GITHUB_REPO = "REPLACE_ME"  # e.g. "my-backups" — the instance repo's name
 DISPATCH_EVENT_TYPE = "baktime-backup"
 
 # Provisioned once via `wrangler kv namespace create BAKTIME_SCHEDULES`,

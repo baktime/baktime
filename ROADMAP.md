@@ -11,9 +11,8 @@ notifications (secrets-driven, upptime-style config — see
 (in-place, destructive, safety-backed-up first) and files targets (restored
 into a staging directory — see `docs/rollback.md`), a status page presenting
 every target's health and recent runs (`site.yml`, `src/status/generate-site.ts`,
-published as a build artifact — GitHub Pages needs a paid plan for a
-private repo, see `site.yml`'s comments for the swap-back path once that's
-available), daily retention enforcement (`prune.yml`: `restic forget` per
+served by the Cloudflare Worker from KV and also kept as a build artifact —
+see `site.yml`'s comments for why not GitHub Pages), daily retention enforcement (`prune.yml`: `restic forget` per
 target tag, then `prune` + `check` once per repository that changed, with a
 dry-run mode and failure notifications), a weekly aggregate notification covering target health, retained
 snapshot/file counts, repository storage, and seven-day outcomes, the

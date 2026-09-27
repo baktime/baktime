@@ -1,65 +1,90 @@
 ![baktime — database and file backups, scheduled and verified on GitHub](assets/baktime-banner.png)
 
-> **The "Upptime" for backups.** GitHub Actions does the work, [restic](https://restic.net/) does the backing up, and a Cloudflare Worker exists only to trigger it reliably on a schedule.
+> **Scheduled, encrypted, deduplicated backups of your servers and databases — run entirely by GitHub Actions, no backup server to maintain.**
 
-baktime backs up MySQL/Postgres databases and files on remote hosts
-reachable over SSH. Like [upptime](https://github.com/upptime/upptime), this
-repo is a **GitHub template**: click "Use this template" to create your
-own private instance, the same way
-[`mleczakm/infrastructure-status`](https://github.com/mleczakm/infrastructure-status)
-is an instance of `upptime/upptime`.
+baktime is a GitHub template repository. You create your own **private**
+copy of it, add each thing you want backed up as a GitHub secret, and from
+then on GitHub Actions backs it up on its schedule into a
+[restic](https://restic.net/) repository — Cloudflare R2 by default, or any
+S3-compatible or restic-supported storage.
 
-## How it's different from upptime
+It backs up:
 
-Uptime pings are tiny and safe to commit to a public repo. Backup data
-isn't. So git only ever stores config and run history — the actual backup
-bytes live in a restic repository (Cloudflare R2 by default, or any
-restic-supported backend), and **targets themselves are never committed at
-all**: which hosts and databases get backed up, and on what schedule, is
-defined entirely by GitHub secrets, the same way upptime configures
-notification channels rather than its plain `sites:` list. Adding or
-removing a target is a "add/remove a secret" operation, no PR needed. See
-[`docs/architecture.md`](docs/architecture.md) for the full design and why.
+- **Files** on any Linux host reachable over SSH (Alpine or glibc, no root
+  needed) — including transactionally consistent copies of live SQLite
+  databases.
+- **MySQL and PostgreSQL** databases, connected directly or through an SSH
+  tunnel via a jump host.
+
+## What you get
+
+- **Schedules per target** — any cron expression, evaluated in UTC.
+- **Encrypted, deduplicated, incremental storage** — restic encrypts
+  everything client-side; only changed data is uploaded.
+- **Retention** — e.g. keep 14 daily, 8 weekly and 12 monthly snapshots;
+  older ones are forgotten and pruned daily.
+- **Run history in git** — every run is recorded in `history/<target>.yml`
+  (time, duration, snapshot id, bytes added, errors), never the data itself.
+- **Status page** — every target's health (healthy / late / failing /
+  never run) and recent runs, served by a small Cloudflare Worker.
+- **Notifications** — a Discord message on every backup success or
+  failure, plus a weekly report with health, snapshot counts and storage
+  used.
+- **Restores** — a manual workflow restores a database snapshot in place
+  (after taking a safety backup first), or a files snapshot into a staging
+  directory on its host.
 
 ## How it works
 
 ```
-sync-cloudflare-schedule.yml   → projects {name, type, schedule} from secrets into Cloudflare KV
-Cloudflare Worker (cron)       → reads KV, fires repository_dispatch only for targets actually due
-backup.yml                     → re-derives the target from secrets, backs it up, commits history/*.yml
+GitHub secrets        one BAKTIME_TARGET_<NAME> JSON secret per target (+ its SSH key / DB password secrets)
+  │
+  ├─ sync-cloudflare-schedule.yml   every 15 min: copies each target's name + schedule (nothing sensitive) into Cloudflare KV
+  │
+Cloudflare Worker                   every 5 min: checks which targets are due and triggers backup.yml for exactly those
+  │
+  └─ backup.yml                     reads the target from secrets, runs the backup, commits history/<target>.yml
+       ├─ files target:     SSH to the host, install a checksum-verified restic there, run `restic backup` on the host
+       └─ database target:  `mysqldump` / `pg_dump` on the runner, streamed straight into `restic backup --stdin`
+
+prune.yml     daily: `restic forget` per target by its retention policy, then `prune` + `check`
+summary.yml   weekly: health and storage report to your notification channels
+site.yml      after each history commit: rebuilds the status page
+restore.yml   manual: restore a snapshot
 ```
 
-For file targets, restic runs *on the target host* itself (self-installed
-over SSH, no root, works on Alpine and glibc alike) so its incremental
-dedup carries over between runs and file bytes never transit the Actions
-runner. Database targets stream `mysqldump`/`pg_dump` straight into
-`restic backup --stdin` from the runner instead, since many databases
-offer no shell access to install anything on.
+The main design decisions:
 
-## Status
+- **Targets live in secrets, not in git.** Which hosts and databases you
+  back up is itself sensitive, so the committed config (`.baktimerc.yml`)
+  holds only non-sensitive instance settings. Adding or removing a target
+  means adding or removing a secret — no commit needed.
+- **File data never passes through GitHub.** restic runs on the host being
+  backed up and talks to storage directly, so large file trees stay fast
+  and incremental.
+- **Database dumps are never written to disk** — they're streamed from the
+  dump tool into restic, which also works for managed databases you can't
+  install anything on.
+- **The Worker exists only for reliable timing.** GitHub's own `schedule:`
+  trigger can be delayed or skipped under load; the Worker is a tiny,
+  stateless dispatcher.
 
-Built: config schema, secrets-driven dynamic target discovery, cron-based
-scheduling, complete `files` and `mysql`/`postgres` backup paths end to
-end, a local-filesystem restic backend option, Discord backup
-success/failure notifications plus a weekly aggregate health/storage report
-(more providers to come — configured the same secrets-driven way as
-everything else), a status site, the schedule-aware Cloudflare Worker, and
-daily retention enforcement (`restic forget` per target + `prune`/`check`
-per repository). Restore verification is designed but not yet built — see
-[`ROADMAP.md`](ROADMAP.md).
+See [`docs/architecture.md`](docs/architecture.md) for the full design.
 
 ## Getting started
 
-See [`docs/getting-started.md`](docs/getting-started.md).
+You need a GitHub account, a Cloudflare account (for R2 storage and the
+Worker) and SSH access to what you want to back up. Follow
+[`docs/getting-started.md`](docs/getting-started.md).
 
 ## Documentation
 
 - [`docs/getting-started.md`](docs/getting-started.md) — set up your own instance
-- [`docs/config-reference.md`](docs/config-reference.md) — `.baktimerc.yml` and target JSON reference
-- [`docs/secrets.md`](docs/secrets.md) — exactly which secrets to create and how to scope them
-- [`docs/architecture.md`](docs/architecture.md) — the full design, and why it differs from upptime where it does
-- [`docs/rollback.md`](docs/rollback.md) — how to restore a previous snapshot, for both database and files targets
-- [`ROADMAP.md`](ROADMAP.md) — what's built vs. designed-but-not-yet-built
+- [`docs/config-reference.md`](docs/config-reference.md) — `.baktimerc.yml`, target JSON and retention reference
+- [`docs/secrets.md`](docs/secrets.md) — which secrets to create and how to scope them
+- [`docs/architecture.md`](docs/architecture.md) — the full design and its trade-offs
+- [`docs/rollback.md`](docs/rollback.md) — restoring database and files snapshots
+- [`ROADMAP.md`](ROADMAP.md) — what's built and what's planned (next: automated restore drills)
 
 ---
-*Architecture inspired by [upptime](https://github.com/upptime/upptime); backup engine is [restic](https://restic.net/).*
+*Inspired by [upptime](https://github.com/upptime/upptime)'s "the GitHub repo is the whole app" approach; backups by [restic](https://restic.net/).*

@@ -1,11 +1,9 @@
 # Getting started
 
-baktime is a **GitHub template repository**, the same way
-[upptime](https://github.com/upptime/upptime) is: this repo
+baktime is a **GitHub template repository**: this repo
 (`baktime/baktime`) is the public template, and you create your own
-private instance from it (the way
-[`mleczakm/infrastructure-status`](https://github.com/mleczakm/infrastructure-status)
-relates to `upptime/upptime`).
+private instance from it. Your instance holds your configuration and run
+history; your targets and credentials live in its GitHub secrets.
 
 **Backup metadata reveals hostnames, database names, and schedules** —
 even without secrets or backup data, that's reconnaissance information
