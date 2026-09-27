@@ -148,6 +148,29 @@ this an import into a non-empty database would just fail on the first
 of the target *before* running the restore — so a wrong tag or target name
 is always recoverable from history, not just theoretically.
 
+## Retention and pruning
+
+`prune.yml` runs `src/cli/apply-retention.ts` daily, in two phases:
+
+1. **Forget, per target.** `restic forget --tag <name> --group-by tags`
+   with the target's policy (its own `retention`, else
+   `defaults.retention`; no policy means keep everything). `--group-by
+   tags` is essential rather than cosmetic: restic's default grouping is
+   `host,paths`, and database snapshots get a fresh timestamped
+   `--stdin-filename` and a random runner hostname on every run, so each
+   would be its own group and nothing would ever be forgotten.
+2. **Prune + check, per repository** — only for repositories where phase 1
+   removed something, and once per repository even when several targets
+   share it. This is the expensive, exclusive-lock step.
+
+Both phases run wherever restic can reach the repository, via the same
+resolver the weekly summary uses (`src/restic/repositories.ts`): on the
+runner for R2/S3/custom repositories, over SSH on the target host for a
+files target's `local` repository. forget/prune pass `--retry-lock 30m`, so
+a maintenance run that overlaps a backup waits instead of failing either
+one. One target's failure never stops the others; any failure fails the
+workflow and is sent to notification channels.
+
 ## Command safety
 
 Every external process invocation (`ssh`, `restic`, and eventually

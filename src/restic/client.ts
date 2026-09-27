@@ -1,3 +1,4 @@
+import type { RetentionPolicy } from "../config/schema.js";
 import { execFile } from "../util/exec.js";
 import type { ResticEnv } from "./env.js";
 
@@ -22,6 +23,117 @@ export function buildSnapshotsArgs(options: { tag?: string; latest?: number } = 
 
 export function buildCheckArgs(): string[] {
   return ["check"];
+}
+
+/**
+ * How long forget/prune wait for a lock held by a concurrent backup instead
+ * of failing immediately — maintenance runs on its own schedule and must
+ * never race a backup into a spurious failure (or vice versa).
+ */
+export const MAINTENANCE_RETRY_LOCK = "30m";
+
+const RETENTION_FLAGS = [
+  ["keepLast", "--keep-last"],
+  ["keepHourly", "--keep-hourly"],
+  ["keepDaily", "--keep-daily"],
+  ["keepWeekly", "--keep-weekly"],
+  ["keepMonthly", "--keep-monthly"],
+  ["keepYearly", "--keep-yearly"],
+] as const satisfies readonly (readonly [keyof RetentionPolicy, string])[];
+
+/** Drops unset and zero fields (restic treats 0 as "no rule"); `null` if nothing is left to enforce. */
+export function normalizeRetentionPolicy(policy: RetentionPolicy | undefined): RetentionPolicy | null {
+  if (!policy) return null;
+  const normalized: RetentionPolicy = {};
+  for (const [key] of RETENTION_FLAGS) {
+    const value = policy[key];
+    if (value !== undefined && value > 0) normalized[key] = value;
+  }
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+export interface ForgetArgsOptions {
+  tag: string;
+  policy: RetentionPolicy;
+  dryRun?: boolean;
+}
+
+/**
+ * `--group-by tags` is load-bearing, not cosmetic: restic's default grouping
+ * is `host,paths`, but database snapshots get a unique timestamped
+ * `--stdin-filename` path and a random GitHub runner hostname on every run,
+ * so each would sit alone in its own group and never be forgotten. Every
+ * baktime snapshot carries its target's name as its tag, which is the
+ * grouping the retention policy is actually meant for.
+ *
+ * Deliberately without `--prune`: pruning is done once per repository
+ * afterwards (see retention/apply.ts), not once per target.
+ */
+export function buildForgetArgs(options: ForgetArgsOptions): string[] {
+  const args = [
+    "forget",
+    "--json",
+    "--tag",
+    options.tag,
+    "--group-by",
+    "tags",
+    "--retry-lock",
+    MAINTENANCE_RETRY_LOCK,
+  ];
+  for (const [key, flag] of RETENTION_FLAGS) {
+    const value = options.policy[key];
+    if (value !== undefined && value > 0) args.push(flag, String(value));
+  }
+  if (options.dryRun) args.push("--dry-run");
+  return args;
+}
+
+export function buildPruneArgs(): string[] {
+  return ["prune", "--retry-lock", MAINTENANCE_RETRY_LOCK];
+}
+
+export interface ForgetResult {
+  kept: number;
+  removed: number;
+}
+
+/**
+ * Parses `restic forget --json`: an array of snapshot groups, each with a
+ * `keep` and a `remove` list (`remove` is `null` when nothing is removed).
+ */
+export function parseForgetResult(stdout: string): ForgetResult {
+  const trimmed = stdout.trim();
+  if (trimmed === "" || trimmed === "null") return { kept: 0, removed: 0 };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (cause) {
+    // Tolerate stray status lines around the JSON document (restic prints
+    // e.g. "removed snapshot ..." notices on some versions) — the policy
+    // result is the one line that is a JSON array.
+    const jsonLine = trimmed
+      .split("\n")
+      .reverse()
+      .find((line) => line.trimStart().startsWith("["));
+    if (jsonLine === undefined) {
+      throw new Error("restic forget output is not valid JSON", { cause });
+    }
+    try {
+      parsed = JSON.parse(jsonLine);
+    } catch {
+      throw new Error("restic forget output is not valid JSON", { cause });
+    }
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error("restic forget output must be a JSON array");
+  }
+  const result: ForgetResult = { kept: 0, removed: 0 };
+  for (const group of parsed) {
+    if (!isRecord(group)) continue;
+    if (Array.isArray(group.keep)) result.kept += group.keep.length;
+    if (Array.isArray(group.remove)) result.removed += group.remove.length;
+  }
+  return result;
 }
 
 /**

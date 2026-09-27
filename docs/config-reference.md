@@ -29,12 +29,9 @@ restic:
 
 defaults:
   retention:
-    keepLast: 14
-    keepHourly: 0
-    keepDaily: 0
+    keepDaily: 14
     keepWeekly: 8
     keepMonthly: 12
-    keepYearly: 0
 
 knownTargets: [] # optional, docs/lint only — see below
 
@@ -54,10 +51,37 @@ statusSite:
 | `restic.repository` | yes | A restic-compatible repository URL, or an absolute local path for the `local` backend. |
 | `restic.passwordSecretName` | yes | **Name** of a GitHub secret holding `RESTIC_PASSWORD` — required for every backend, since restic always encrypts the repository regardless of where it lives. |
 | `restic.accessKeyIdSecretName` / `secretAccessKeySecretName` | only for `r2`/`s3` | **Names** of GitHub secrets holding the actual S3-style credential values — never the values themselves. Omit for `local`/`custom` unless that backend actually needs them. |
-| `defaults.retention` | no | Falls back to restic's own defaults (effectively "keep everything") if omitted entirely. Every field is a plain [restic `forget`](https://restic.readthedocs.io/en/stable/060_forget.html) policy field; unset fields aren't passed to restic. Only used by the Phase 3 `prune.yml` — see `ROADMAP.md`. |
+| `defaults.retention` | no | Retention policy for every target that doesn't set its own — see [Retention](#retention) below. Omit it entirely to keep every snapshot forever. |
 | `knownTargets` | no | Bare, lowercase-kebab target names, for human documentation and CI linting only. Discovery never depends on this list being present or accurate. |
 | `secrets` | no | Bare GitHub secret names (e.g. `NOTIFICATION_DISCORD`), for documentation only — same field name and purpose as upptime's own `secrets:` allowlist. See [secrets.md](./secrets.md#notifications). |
 | `statusSite.*` | no | Only used once the Phase 3 status site exists — see `ROADMAP.md`. |
+
+## Retention
+
+`prune.yml` enforces retention daily (05:23 UTC by default — move it if
+your backups run then). Fields map one-to-one onto
+[restic `forget`](https://restic.readthedocs.io/en/stable/060_forget.html)
+flags: `keepLast`, `keepHourly`, `keepDaily`, `keepWeekly`, `keepMonthly`,
+`keepYearly`. Unset or `0` fields are ignored; a policy with nothing left
+keeps everything.
+
+- A target's own `retention` **replaces** `defaults.retention` as a whole
+  (fields aren't merged), so `{ "keepDaily": 7 }` on a target means
+  exactly "7 daily", with no weekly/monthly tail.
+- Rules are applied per target (restic `--tag <name> --group-by tags`), so
+  one target's policy never touches another's snapshots even in a shared
+  repository.
+- Rules combine as a union: `keepDaily: 14, keepWeekly: 8, keepMonthly: 12`
+  keeps the newest snapshot of each of the last 14 days, 8 weeks and 12
+  months — roughly a year of history in ~30 snapshots.
+- Prefer calendar rules over `keepLast`: extra manual runs and restore
+  safety backups would otherwise push older days out of the window.
+- `restic prune` (which actually frees storage) and `restic check` only run
+  on repositories where something was forgotten.
+- Run `prune.yml` manually with **dry run** ticked to see what would be
+  removed without deleting anything. The workflow's run summary shows
+  kept/removed counts per target; failures are also sent to your
+  notification channels.
 
 ## Notifications (via secrets, not here)
 

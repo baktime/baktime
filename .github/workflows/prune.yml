@@ -1,12 +1,48 @@
-name: Prune (Phase 3 — not implemented yet)
+name: Prune
 
-# Will run `restic forget --prune` per target's retention policy and
-# `restic check`, scoped by restic tag. See ROADMAP.md, Phase 3.
+# Enforces every target's retention policy (target `retention`, falling back
+# to .baktimerc.yml's `defaults.retention`): `restic forget` per target
+# (scoped by tag), then `restic prune` + `restic check` once per repository
+# that actually dropped snapshots. Targets without any policy keep every
+# snapshot. See src/retention/apply.ts.
+#
+# Runs daily at an off-hour minute (GitHub delays top-of-hour schedules).
+# A few hours' scheduling drift is harmless here, unlike for backups, so
+# plain GitHub cron is fine without the Cloudflare Worker. Pick a time well
+# clear of your targets' backup schedules; restic waits up to 30 minutes
+# for a concurrent backup's lock rather than failing either run.
 on:
-  workflow_dispatch: {}
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only report what would be removed — delete nothing"
+        type: boolean
+        default: false
+
+concurrency:
+  group: baktime-prune
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-  placeholder:
+  prune:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "prune.yml is a placeholder — see ROADMAP.md, Phase 3"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install restic decompression dependency
+        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends bzip2
+      - name: Apply retention
+        env:
+          BAKTIME_SECRETS_JSON: ${{ toJSON(secrets) }}
+          BAKTIME_RETENTION_DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+        run: node dist/cli/apply-retention.js

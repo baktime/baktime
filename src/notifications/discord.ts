@@ -1,5 +1,7 @@
+import { formatRetentionPolicy, hasRetentionFailures, type RetentionReport } from "../retention/apply.js";
 import type { WeeklyTargetSummary } from "../summary/weekly.js";
 import {
+  isRetentionReportEvent,
   isWeeklySummaryEvent,
   type BackupNotificationEvent,
   type NotificationChannel,
@@ -193,8 +195,38 @@ export function buildWeeklyDiscordPayload(
   return { embeds };
 }
 
+export function buildRetentionDiscordPayload(event: RetentionReport): Record<string, unknown> {
+  const failed = hasRetentionFailures(event);
+  const removed = event.targets.reduce((sum, result) => sum + (result.removed ?? 0), 0);
+  const lines = [
+    ...event.targets.map((result) => {
+      if (result.status === "failed") return `❌ **${result.target}** — ${result.error ?? "failed"}`;
+      if (result.status === "skipped") return `⏺️ **${result.target}** — no retention policy, keeping everything`;
+      return `✅ **${result.target}** (${formatRetentionPolicy(result.policy)}) — kept ${result.kept ?? 0}, removed ${result.removed ?? 0}`;
+    }),
+    ...event.repositories
+      .filter((result) => result.status === "failed")
+      .map((result) => `❌ **${result.repository}** — ${result.failedStep} failed: ${result.error ?? ""}`),
+  ];
+  return {
+    embeds: [
+      {
+        title: failed
+          ? "❌ Backup retention needs attention"
+          : `🧹 Backup retention applied: ${removed} snapshot${removed === 1 ? "" : "s"} removed`,
+        color: failed ? COLOR_FAILURE : COLOR_SUCCESS,
+        description: truncate(lines.join("\n"), 4000),
+        timestamp: event.generatedAt,
+        footer: { text: `baktime${event.dryRun ? " · dry run" : ""}` },
+      },
+    ],
+  };
+}
+
 export function buildNotificationDiscordPayload(event: NotificationEvent): Record<string, unknown> {
-  return isWeeklySummaryEvent(event) ? buildWeeklyDiscordPayload(event) : buildDiscordPayload(event);
+  if (isWeeklySummaryEvent(event)) return buildWeeklyDiscordPayload(event);
+  if (isRetentionReportEvent(event)) return buildRetentionDiscordPayload(event);
+  return buildDiscordPayload(event);
 }
 
 export interface DiscordChannelOptions {

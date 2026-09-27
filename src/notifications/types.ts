@@ -1,9 +1,10 @@
 import type { HistoryRecord } from "../history/types.js";
+import type { RetentionReport } from "../retention/apply.js";
 import type { WeeklySummaryEvent } from "../summary/weekly.js";
 
 /** Identical shape to the history record a run just produced — no separate event type needed. */
 export type BackupNotificationEvent = HistoryRecord;
-export type NotificationEvent = BackupNotificationEvent | WeeklySummaryEvent;
+export type NotificationEvent = BackupNotificationEvent | WeeklySummaryEvent | RetentionReport;
 
 export interface NotificationChannel {
   /** Short identifier used only in baktime's own log lines when a channel fails to send. */
@@ -13,4 +14,8 @@ export interface NotificationChannel {
 
 export function isWeeklySummaryEvent(event: NotificationEvent): event is WeeklySummaryEvent {
   return "kind" in event && event.kind === "weekly-summary";
+}
+
+export function isRetentionReportEvent(event: NotificationEvent): event is RetentionReport {
+  return "kind" in event && event.kind === "retention";
 }

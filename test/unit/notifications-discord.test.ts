@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   buildDiscordPayload,
+  buildNotificationDiscordPayload,
   buildWeeklyDiscordPayload,
   createDiscordChannel,
   formatBytes,
@@ -217,5 +218,25 @@ describe("createDiscordChannel", () => {
     });
 
     await expect(channel.send(successEvent)).rejects.toThrow(/401/);
+  });
+});
+
+describe("buildRetentionDiscordPayload", () => {
+  it("flags failures and lists each target's outcome", () => {
+    const payload = buildNotificationDiscordPayload({
+      kind: "retention",
+      generatedAt: "2026-09-27T05:23:00.000Z",
+      dryRun: false,
+      targets: [
+        { target: "db", repository: "r2", policy: { keepDaily: 14 }, status: "applied", kept: 14, removed: 1 },
+        { target: "web", repository: "vps", policy: { keepLast: 3 }, status: "failed", error: "ssh timeout" },
+      ],
+      repositories: [{ repository: "r2", status: "failed", failedStep: "prune", error: "lock held" }],
+    }) as { embeds: { title: string; description: string }[] };
+    const embed = payload.embeds[0];
+    expect(embed?.title).toBe("❌ Backup retention needs attention");
+    expect(embed?.description).toContain("✅ **db** (14 daily) — kept 14, removed 1");
+    expect(embed?.description).toContain("❌ **web** — ssh timeout");
+    expect(embed?.description).toContain("❌ **r2** — prune failed: lock held");
   });
 });

@@ -27,9 +27,14 @@ restic:
   # repository: /storage/restic-repo
   # passwordSecretName: RESTIC_PASSWORD
 
+# Enforced daily by prune.yml (restic forget + prune, per target tag). A
+# target's own `retention` replaces this whole block; remove it entirely to
+# keep every snapshot forever. Calendar rules (keepDaily etc.) are usually
+# what you want over keepLast: extra manual runs or restore safety backups
+# then don't push older days out of the window.
 defaults:
   retention:
-    keepLast: 14
+    keepDaily: 14
     keepWeekly: 8
     keepMonthly: 12
 

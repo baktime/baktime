@@ -13,25 +13,26 @@ into a staging directory — see `docs/rollback.md`), a status page presenting
 every target's health and recent runs (`site.yml`, `src/status/generate-site.ts`,
 published as a build artifact — GitHub Pages needs a paid plan for a
 private repo, see `site.yml`'s comments for the swap-back path once that's
-available), a weekly aggregate notification covering target health, retained
+available), daily retention enforcement (`prune.yml`: `restic forget` per
+target tag, then `prune` + `check` once per repository that changed, with a
+dry-run mode and failure notifications), a weekly aggregate notification covering target health, retained
 snapshot/file counts, repository storage, and seven-day outcomes, the
-`backup.yml`/`sync-cloudflare-schedule.yml`/`ci.yml`/`deploy-cloudflare-worker.yml`/`restore.yml`/`site.yml`/`summary.yml`
+`backup.yml`/`sync-cloudflare-schedule.yml`/`ci.yml`/`deploy-cloudflare-worker.yml`/`restore.yml`/`site.yml`/`summary.yml`/`prune.yml`
 workflows, and the schedule-aware Cloudflare Worker. See
 `docs/architecture.md` for how it all fits together.
 
 Everything below is designed for (schema/workflow shape already exists as
 placeholders where relevant) but not implemented.
 
-## Phase 3 — Trend graphs, pruning
+## Phase 3 — Trend graphs
 
 - `src/status/generate-graphs.ts`: size/duration trend series per target,
   written as JSON for a client-side chart rather than server-rendered
   images (no headless-canvas dependency in CI), rendered into the status
   site built by `site.yml`.
-- `prune.yml`: for each target's `retention` policy, `restic forget
-  --prune --tag <name>` then `restic check`; writes a `prune`-type history
-  record; opens an issue on `check` failure (ties into Phase 5's issue
-  automation).
+- Surface each target's retention policy and last prune outcome on the
+  status site, and open an issue on a `restic check` failure after prune
+  (ties into Phase 5's issue automation).
 
 ## Phase 4 — Worker/KV soak test
 

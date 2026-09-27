@@ -43,8 +43,9 @@ scheduling, complete `files` and `mysql`/`postgres` backup paths end to
 end, a local-filesystem restic backend option, Discord backup
 success/failure notifications plus a weekly aggregate health/storage report
 (more providers to come — configured the same secrets-driven way as
-everything else), a status site, and the schedule-aware Cloudflare Worker.
-Retention/pruning and restore verification are designed but not yet built — see
+everything else), a status site, the schedule-aware Cloudflare Worker, and
+daily retention enforcement (`restic forget` per target + `prune`/`check`
+per repository). Restore verification is designed but not yet built — see
 [`ROADMAP.md`](ROADMAP.md).
 
 ## Getting started

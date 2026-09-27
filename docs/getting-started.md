@@ -80,6 +80,5 @@ manual verification checklist there before you fully trust a new instance.
 
 ## What's not here yet
 
-Database targets (`mysql`/`postgres`), the status site, retention/pruning,
-and restore drills are on the roadmap but not built yet — see
-`../ROADMAP.md`. A `files` target end-to-end is what this pass delivers.
+Restore drills and trend graphs are on the roadmap but not built yet — see
+`../ROADMAP.md`.

@@ -23,11 +23,15 @@ spins up. Scope it as narrowly as GitHub allows:
 - A **fine-grained personal access token**, not a classic PAT.
 - **Repository access**: only this one instance repo — never "all
   repositories".
-- **Permissions**: `Contents: Read` and `Actions: Write` — nothing else.
-  (`repository_dispatch` requires the token to be able to write to Actions;
-  double-check this against current GitHub docs when you set it up, since
-  exact scope requirements for this endpoint have shifted across GitHub API
-  versions.)
+- **Permissions**: `Contents: Read and write` — nothing else. (`Metadata:
+  Read` gets auto-selected alongside it; that's fine, it's read-only.)
+  Confirmed empirically against a live 403: `repository_dispatch` checks
+  the `Contents` permission, *not* `Actions` — a token with `Contents: Read`
+  + `Actions: Write` (this doc's own earlier, incorrect guidance) still
+  gets "Resource not accessible by personal access token". Double-check
+  this against current GitHub docs when you set it up regardless, since
+  exact scope requirements for this endpoint have shifted across GitHub
+  API versions before.
 - Rotate it periodically, and immediately if you ever suspect it leaked
   (Worker logs, a compromised laptop, etc.) — rotating is just generating a
   new PAT, updating the `GH_PAT` GitHub secret, and re-running

@@ -34,7 +34,13 @@ function mostRecentOccurrence(schedule: string, asOf: Date): Date {
   return cron.prev().toDate();
 }
 
-async function dispatchBackup(env: Env, targetName: string): Promise<void> {
+/**
+ * Returns whether the dispatch actually reached GitHub, so the caller can
+ * decide whether this occurrence counts as fired (see the `lastfired` write
+ * in `tick`) — a failed call must be retried on the next tick, not treated
+ * as done just because we attempted it.
+ */
+async function dispatchBackup(env: Env, targetName: string): Promise<boolean> {
   const response = await fetch(
     `https://api.github.com/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/dispatches`,
     {
@@ -53,13 +59,18 @@ async function dispatchBackup(env: Env, targetName: string): Promise<void> {
 
   if (!response.ok) {
     // Cloudflare surfaces console output in the dashboard's Worker logs —
-    // deliberately not retried/queued here (see wrangler.toml comment: this
-    // stays a dumb dispatcher with no state beyond the KV schedule/lastfired
-    // keys), consistent with the reference project's cron-trigger pattern.
+    // deliberately not queued/retried within this same invocation (see
+    // wrangler.toml comment: this stays a dumb dispatcher with no state
+    // beyond the KV schedule/lastfired keys); instead we simply leave
+    // `lastfired` untouched below so the very next 5-minute tick tries
+    // this occurrence again.
     console.error(
       `repository_dispatch for "${targetName}" failed: HTTP ${response.status} ${await response.text()}`,
     );
+    return false;
   }
+
+  return true;
 }
 
 async function tick(env: Env): Promise<void> {
@@ -99,8 +110,10 @@ async function tick(env: Env): Promise<void> {
       continue; // already dispatched for this occurrence
     }
 
-    await dispatchBackup(env, entry.name);
-    await env.BAKTIME_SCHEDULES.put(lastFiredKey, now.toISOString());
+    const dispatched = await dispatchBackup(env, entry.name);
+    if (dispatched) {
+      await env.BAKTIME_SCHEDULES.put(lastFiredKey, now.toISOString());
+    }
   }
 }
 
