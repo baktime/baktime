@@ -1,6 +1,8 @@
-![baktime — database and file backups, scheduled and verified on GitHub](assets/baktime-banner.png)
+![baktime — backups that keep their time](assets/baktime-banner.png)
 
-> **Scheduled, encrypted, deduplicated backups of your servers and databases — run entirely by GitHub Actions, no backup server to maintain.**
+> **Scheduled, encrypted, deduplicated backups of your servers, databases and files — run by GitHub Actions, with no backup server to maintain.**
+
+Explore the [baktime project homepage](https://baktime.github.io/baktime/) for an overview of how it works and what you get. If the project is useful, [say thanks on Suppi](https://suppi.pl/mleczakm).
 
 baktime is a GitHub template repository. You create your own **private**
 copy of it, add each thing you want backed up as a GitHub secret, and from
