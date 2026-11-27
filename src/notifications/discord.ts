@@ -7,6 +7,9 @@ import {
   type NotificationChannel,
   type NotificationEvent,
 } from "./types.js";
+import { formatBytes, formatDuration, truncate } from "./format.js";
+
+export { formatBytes, formatDuration } from "./format.js";
 
 const COLOR_SUCCESS = 0x2ecc71; // green
 const COLOR_FAILURE = 0xe74c3c; // red
@@ -16,31 +19,6 @@ const DISCORD_FIELD_VALUE_LIMIT = 1000; // Discord's embed field value limit is 
 const DISCORD_FIRST_TARGET_FIELDS = 4;
 const DISCORD_CONTINUATION_TARGET_FIELDS = 5;
 const DISCORD_MAX_EMBEDS = 10;
-
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1024;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return `${value.toFixed(1)} ${units[unitIndex]}`;
-}
-
-export function formatDuration(ms: number): string {
-  const totalSeconds = Math.round(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-}
-
-function truncate(text: string, maxLength: number): string {
-  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
-}
 
 /**
  * A Discord "embed" — richer than a plain message (color-coded, structured

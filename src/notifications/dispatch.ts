@@ -1,5 +1,8 @@
-import type { SecretsStore } from "../config/secrets.js";
+import { registerSecretValue, type SecretsStore } from "../config/secrets.js";
 import { createDiscordChannel } from "./discord.js";
+import { createSlackChannel } from "./slack.js";
+import { createTelegramChannel } from "./telegram.js";
+import { createWebhookChannel } from "./webhook.js";
 import type { NotificationChannel, NotificationEvent } from "./types.js";
 
 /**
@@ -14,22 +17,61 @@ function isEnabled(value: string | undefined): boolean {
   return value === "true" || value === "1";
 }
 
+/**
+ * Returns the provider's settings when it is enabled and every required
+ * setting is present. An enabled provider with missing settings logs a
+ * warning and is skipped — it must never fail the backup itself.
+ */
+function readProviderSettings<const S extends string>(
+  secrets: SecretsStore,
+  provider: string,
+  label: string,
+  settings: readonly S[],
+): Record<S, string> | undefined {
+  const flag = `NOTIFICATION_${provider}`;
+  if (!isEnabled(secrets.peek(flag))) return undefined;
+
+  const missing = settings
+    .map((setting) => `${flag}_${setting}`)
+    .filter((name) => !secrets.peek(name)?.trim());
+  if (missing.length > 0) {
+    console.error(
+      `${flag} is enabled but ${missing.join(" and ")} ${missing.length === 1 ? "is" : "are"} not set — skipping ${label} notifications.`,
+    );
+    return undefined;
+  }
+
+  const values = settings.map((setting) => {
+    const value = secrets.resolve(`${flag}_${setting}`).trim();
+    // resolve() registered the raw value; pasted secrets often carry a trailing newline.
+    registerSecretValue(value);
+    return [setting, value] as const;
+  });
+  return Object.fromEntries(values) as Record<S, string>;
+}
+
 export function discoverNotificationChannels(secrets: SecretsStore): NotificationChannel[] {
   const channels: NotificationChannel[] = [];
 
-  if (isEnabled(secrets.peek("NOTIFICATION_DISCORD"))) {
-    if (secrets.has("NOTIFICATION_DISCORD_WEBHOOK_URL")) {
-      channels.push(
-        createDiscordChannel({ webhookUrl: secrets.resolve("NOTIFICATION_DISCORD_WEBHOOK_URL") }),
-      );
-    } else {
-      console.error(
-        "NOTIFICATION_DISCORD is enabled but NOTIFICATION_DISCORD_WEBHOOK_URL is not set — skipping Discord notifications.",
-      );
-    }
+  const discord = readProviderSettings(secrets, "DISCORD", "Discord", ["WEBHOOK_URL"]);
+  if (discord) {
+    channels.push(createDiscordChannel({ webhookUrl: discord.WEBHOOK_URL }));
   }
 
-  // Additional providers (Slack, email, ...) register here the same way — see ROADMAP.md.
+  const slack = readProviderSettings(secrets, "SLACK", "Slack", ["WEBHOOK_URL"]);
+  if (slack) {
+    channels.push(createSlackChannel({ webhookUrl: slack.WEBHOOK_URL }));
+  }
+
+  const telegram = readProviderSettings(secrets, "TELEGRAM", "Telegram", ["BOT_TOKEN", "CHAT_ID"]);
+  if (telegram) {
+    channels.push(createTelegramChannel({ botToken: telegram.BOT_TOKEN, chatId: telegram.CHAT_ID }));
+  }
+
+  const webhook = readProviderSettings(secrets, "WEBHOOK", "generic webhook", ["URL"]);
+  if (webhook) {
+    channels.push(createWebhookChannel({ url: webhook.URL }));
+  }
 
   return channels;
 }

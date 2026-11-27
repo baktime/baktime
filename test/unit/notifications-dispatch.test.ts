@@ -4,6 +4,18 @@ const createDiscordChannelMock = vi.fn();
 vi.mock("../../src/notifications/discord.js", () => ({
   createDiscordChannel: (...args: unknown[]) => createDiscordChannelMock(...args),
 }));
+const createSlackChannelMock = vi.fn();
+vi.mock("../../src/notifications/slack.js", () => ({
+  createSlackChannel: (...args: unknown[]) => createSlackChannelMock(...args),
+}));
+const createTelegramChannelMock = vi.fn();
+vi.mock("../../src/notifications/telegram.js", () => ({
+  createTelegramChannel: (...args: unknown[]) => createTelegramChannelMock(...args),
+}));
+const createWebhookChannelMock = vi.fn();
+vi.mock("../../src/notifications/webhook.js", () => ({
+  createWebhookChannel: (...args: unknown[]) => createWebhookChannelMock(...args),
+}));
 
 const { discoverNotificationChannels, notifyAll } = await import("../../src/notifications/dispatch.js");
 const { SecretsStore } = await import("../../src/config/secrets.js");
@@ -12,6 +24,9 @@ const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
 afterEach(() => {
   createDiscordChannelMock.mockReset();
+  createSlackChannelMock.mockReset();
+  createTelegramChannelMock.mockReset();
+  createWebhookChannelMock.mockReset();
   consoleErrorSpy.mockClear();
 });
 
@@ -72,6 +87,105 @@ describe("discoverNotificationChannels", () => {
       NOTIFICATION_DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/1/a",
     });
     expect(discoverNotificationChannels(secrets)).toEqual([fakeChannel]);
+  });
+});
+
+describe("discoverNotificationChannels — Slack, Telegram and generic webhook", () => {
+  it("enables Slack with its webhook URL", () => {
+    const fakeChannel = { name: "slack", send: vi.fn() };
+    createSlackChannelMock.mockReturnValue(fakeChannel);
+    const secrets = SecretsStore.fromRecord({
+      NOTIFICATION_SLACK: "true",
+      NOTIFICATION_SLACK_WEBHOOK_URL: "https://hooks.slack.com/services/T/B/x",
+    });
+
+    expect(discoverNotificationChannels(secrets)).toEqual([fakeChannel]);
+    expect(createSlackChannelMock).toHaveBeenCalledWith({ webhookUrl: "https://hooks.slack.com/services/T/B/x" });
+  });
+
+  it("enables Telegram with its bot token and chat id, trimming pasted whitespace", () => {
+    const fakeChannel = { name: "telegram", send: vi.fn() };
+    createTelegramChannelMock.mockReturnValue(fakeChannel);
+    const secrets = SecretsStore.fromRecord({
+      NOTIFICATION_TELEGRAM: "1",
+      NOTIFICATION_TELEGRAM_BOT_TOKEN: "123:abc\n",
+      NOTIFICATION_TELEGRAM_CHAT_ID: " -1001234 ",
+    });
+
+    expect(discoverNotificationChannels(secrets)).toEqual([fakeChannel]);
+    expect(createTelegramChannelMock).toHaveBeenCalledWith({ botToken: "123:abc", chatId: "-1001234" });
+  });
+
+  it("enables the generic webhook with its URL", () => {
+    const fakeChannel = { name: "webhook", send: vi.fn() };
+    createWebhookChannelMock.mockReturnValue(fakeChannel);
+    const secrets = SecretsStore.fromRecord({
+      NOTIFICATION_WEBHOOK: "true",
+      NOTIFICATION_WEBHOOK_URL: "https://example.test/hook",
+    });
+
+    expect(discoverNotificationChannels(secrets)).toEqual([fakeChannel]);
+    expect(createWebhookChannelMock).toHaveBeenCalledWith({ url: "https://example.test/hook" });
+  });
+
+  it("enables every configured provider side by side", () => {
+    createDiscordChannelMock.mockReturnValue({ name: "discord", send: vi.fn() });
+    createSlackChannelMock.mockReturnValue({ name: "slack", send: vi.fn() });
+    createTelegramChannelMock.mockReturnValue({ name: "telegram", send: vi.fn() });
+    createWebhookChannelMock.mockReturnValue({ name: "webhook", send: vi.fn() });
+    const secrets = SecretsStore.fromRecord({
+      NOTIFICATION_DISCORD: "true",
+      NOTIFICATION_DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/1/a",
+      NOTIFICATION_SLACK: "true",
+      NOTIFICATION_SLACK_WEBHOOK_URL: "https://hooks.slack.com/services/T/B/x",
+      NOTIFICATION_TELEGRAM: "true",
+      NOTIFICATION_TELEGRAM_BOT_TOKEN: "123:abc",
+      NOTIFICATION_TELEGRAM_CHAT_ID: "42",
+      NOTIFICATION_WEBHOOK: "true",
+      NOTIFICATION_WEBHOOK_URL: "https://example.test/hook",
+    });
+
+    expect(discoverNotificationChannels(secrets).map((channel) => channel.name)).toEqual([
+      "discord",
+      "slack",
+      "telegram",
+      "webhook",
+    ]);
+  });
+
+  it.each([
+    ["Slack", { NOTIFICATION_SLACK: "true" }, "NOTIFICATION_SLACK_WEBHOOK_URL"],
+    ["Slack (blank URL)", { NOTIFICATION_SLACK: "true", NOTIFICATION_SLACK_WEBHOOK_URL: "  " }, "NOTIFICATION_SLACK_WEBHOOK_URL"],
+    ["Telegram", { NOTIFICATION_TELEGRAM: "true", NOTIFICATION_TELEGRAM_BOT_TOKEN: "123:abc" }, "NOTIFICATION_TELEGRAM_CHAT_ID"],
+    ["the generic webhook", { NOTIFICATION_WEBHOOK: "true" }, "NOTIFICATION_WEBHOOK_URL"],
+  ])("logs a warning and skips %s when a required setting is missing", (_label, record, missingSecret) => {
+    const channels = discoverNotificationChannels(SecretsStore.fromRecord(record));
+
+    expect(channels).toEqual([]);
+    expect(createSlackChannelMock).not.toHaveBeenCalled();
+    expect(createTelegramChannelMock).not.toHaveBeenCalled();
+    expect(createWebhookChannelMock).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(missingSecret));
+  });
+
+  it("names every missing Telegram setting in one warning", () => {
+    discoverNotificationChannels(SecretsStore.fromRecord({ NOTIFICATION_TELEGRAM: "true" }));
+
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "NOTIFICATION_TELEGRAM is enabled but NOTIFICATION_TELEGRAM_BOT_TOKEN and NOTIFICATION_TELEGRAM_CHAT_ID are not set — skipping Telegram notifications.",
+    );
+  });
+
+  it("a misconfigured provider does not stop the others from being enabled", () => {
+    createSlackChannelMock.mockReturnValue({ name: "slack", send: vi.fn() });
+    const secrets = SecretsStore.fromRecord({
+      NOTIFICATION_TELEGRAM: "true",
+      NOTIFICATION_SLACK: "true",
+      NOTIFICATION_SLACK_WEBHOOK_URL: "https://hooks.slack.com/services/T/B/x",
+    });
+
+    expect(discoverNotificationChannels(secrets).map((channel) => channel.name)).toEqual(["slack"]);
   });
 });
 

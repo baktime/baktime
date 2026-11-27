@@ -27,9 +27,10 @@ The template is free. Running costs depend on your private repository’s Action
   (time, duration, snapshot id, bytes added, errors), never the data itself.
 - **Status page** — every target's health (healthy / late / failing /
   never run) and recent runs, served by a small Cloudflare Worker.
-- **Notifications** — a Discord message on every backup success or
-  failure, plus a weekly report with health, snapshot counts and storage
-  used.
+- **Notifications** — in the channel you choose: Discord, Slack, Telegram,
+  or a generic JSON webhook for your own automation (any combination). A
+  message on every backup success or failure and on any retention failure,
+  plus a weekly report with health, snapshot counts and storage used.
 - **Restores** — a manual workflow restores a database snapshot in place
   (after taking a safety backup first), or a files snapshot into a staging
   directory on its host.

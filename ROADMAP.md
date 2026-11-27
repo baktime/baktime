@@ -5,8 +5,9 @@ cron-based scheduling, the full `files`-target backup path
 (self-bootstrapping remote restic over SSH), the full `mysql`/`postgres`
 backup path (direct or SSH-tunnel connection, dump streamed straight into
 `restic backup --stdin` on the runner), a local-filesystem restic backend
-option (files targets only), history, Discord backup success/failure
-notifications (secrets-driven, upptime-style config — see
+option (files targets only), history, backup success/failure
+notifications to Discord, Slack, Telegram and a generic JSON webhook
+(secrets-driven, upptime-style config — see
 `docs/secrets.md#notifications`), a restore path for both database targets
 (in-place, destructive, safety-backed-up first) and files targets (restored
 into a staging directory — see `docs/rollback.md`), a status page presenting
@@ -63,15 +64,17 @@ across restarts, KV eventual-consistency edge cases, and Worker redeploys.
 
 ## Additional notification providers
 
-`src/notifications/dispatch.ts`'s `discoverNotificationChannels` is
-designed for this: each provider is a self-contained block reading its own
-`NOTIFICATION_<PROVIDER>*` secrets and pushing a `NotificationChannel`.
-Candidates, in likely order of usefulness: Slack (webhook, same shape as
-Discord's), email (would need an SMTP or transactional-email-API secret
-set), and a generic webhook/Apprise-style catch-all for anything else.
-`summary.yml`'s incident issues (Phase 5) are a separate, complementary
-signal (durable, threaded per-incident) rather than a provider to fold in
-here.
+Discord, Slack, Telegram and a generic JSON webhook are done.
+`src/notifications/dispatch.ts`'s `discoverNotificationChannels` stays the
+single place providers register: each is a self-contained block reading its
+own `NOTIFICATION_<PROVIDER>*` secrets and pushing a `NotificationChannel`,
+and chat-style providers reuse the provider-neutral message from
+`src/notifications/message.ts`. Remaining candidates: email (would need an
+SMTP or transactional-email-API secret set), Microsoft Teams (workflow
+webhook), and an HMAC signature header for the generic webhook so receivers
+can verify the sender. `summary.yml`'s incident issues (Phase 5) are a
+separate, complementary signal (durable, threaded per-incident) rather than
+a provider to fold in here.
 
 ## Phase 6 — Integration test harness
 
