@@ -12,8 +12,7 @@ repo **private**.
 
 ## 1. Create your instance repo
 
-Click "Use this template" on `baktime/baktime`, create a new **private**
-repository, and clone it locally.
+[Create a repository from the template](https://github.com/baktime/baktime/generate), choose **Private**, and clone it locally. For a complete worked example, follow the [English](https://baktime.github.io/?lang=en#start) or [Polish](https://baktime.github.io/pl/#start) walkthrough.
 
 ## 2. Set up a Cloudflare R2 bucket
 
@@ -46,6 +45,7 @@ npx wrangler kv namespace create BAKTIME_SCHEDULES
 # paste the printed id into wrangler.toml's [[kv_namespaces]] id field,
 # and set GITHUB_OWNER/GITHUB_REPO in wrangler.toml's [vars] to your instance repo
 npx wrangler deploy
+npx wrangler secret put GH_PAT
 ```
 
 Or push a change under `cloudflare-worker/` to `main` and let

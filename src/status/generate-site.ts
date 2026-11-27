@@ -90,7 +90,7 @@ function renderTargetCard(status: TargetStatus): string {
       (record) => `
         <tr>
           <td>${escapeHtml(record.timestamp)}</td>
-          <td>${record.status === "success" ? "✅" : "❌"}</td>
+          <td>${record.status === "success" ? "Success" : "Failed"}</td>
           <td>${(record.durationMs / 1000).toFixed(1)}s</td>
           <td>${renderRecordSummary(record)}</td>
         </tr>`,
@@ -103,10 +103,10 @@ function renderTargetCard(status: TargetStatus): string {
       <p class="meta">${escapeHtml(status.type)} · schedule <code>${escapeHtml(status.schedule)}</code></p>
       ${
         status.recentRuns.length > 0
-          ? `<h3>Available backups (recent snapshots)</h3><table>
-              <thead><tr><th>When</th><th></th><th>Duration</th><th>Result</th></tr></thead>
+          ? `<h3>Available backups (recent snapshots)</h3><div class="runs"><table>
+              <thead><tr><th>When</th><th>Status</th><th>Duration</th><th>Result</th></tr></thead>
               <tbody>${rows}</tbody>
-            </table>`
+            </table></div>`
           : `<p class="meta">No runs recorded yet.</p>`
       }
     </section>`;
@@ -120,27 +120,37 @@ export function renderSiteHtml(statuses: readonly TargetStatus[], generatedAt: D
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>baktime — backup status</title>
 <style>
-  :root { color-scheme: light dark; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
-  h1 { font-size: 1.5rem; }
-  .generated-at { color: #888; font-size: 0.85rem; margin-top: -0.5rem; }
-  section.target { border: 1px solid #ccc4; border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0; }
-  section.target h2 { margin: 0 0 0.25rem; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; }
-  section.target h3 { margin: 0.8rem 0 0.35rem; font-size: 0.9rem; }
-  .meta { color: #888; font-size: 0.85rem; margin: 0 0 0.75rem; }
-  .badge { font-size: 0.7rem; font-weight: normal; padding: 0.15rem 0.5rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; }
-  .health-healthy .badge { background: #2ecc7133; color: #1e8449; }
-  .health-late .badge { background: #f1c40f33; color: #9a7d0a; }
-  .health-failing .badge { background: #e74c3c33; color: #c0392b; }
-  .health-never-run .badge { background: #8884; color: #666; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  th, td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid #ccc3; }
-  code { font-size: 0.85em; }
-  .error { color: #c0392b; }
+  :root { color-scheme: light; font: 100%/1.6 Inter, system-ui, sans-serif; color: #152f2c; background: #f1f5ee; }
+  * { box-sizing: border-box; }
+  body { max-width: 66rem; margin: auto; padding: 2rem 5% 4rem; }
+  .brand { font-size: 1.6rem; font-weight: 750; letter-spacing: -.065em; }
+  .brand b { color: #bd562a; }
+  h1 { margin: 1rem 0 .25rem; font-size: clamp(2rem, 5vw, 3rem); line-height: 1.1; letter-spacing: -.05em; }
+  .generated-at, .meta { color: #4f645d; margin: .25rem 0 1rem; }
+  .target { background: #fcfdf9; border: 1px solid #ccdad2; border-radius: .85rem; margin: 1rem 0; padding: 1.25rem; }
+  .target h2 { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: 0; font-size: 1.3rem; overflow-wrap: anywhere; }
+  .target h3 { font-size: 1rem; margin: 1rem 0 .5rem; }
+  .badge { border-radius: 1rem; padding: .12rem .65rem; font-size: .88rem; font-weight: 600; }
+  .health-healthy .badge { color: #1a5846; background: #deefe1; }
+  .health-late .badge { color: #764412; background: #fae9ca; }
+  .health-failing .badge { color: #8a3024; background: #fbe3d8; }
+  .health-never-run .badge { color: #42594f; background: #e6ebe7; }
+  .runs { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .94rem; }
+  th, td { text-align: left; vertical-align: top; padding: .4rem .6rem; border-bottom: 1px solid #dce6dd; }
+  .error { color: #8a3024; overflow-wrap: anywhere; }
+  @media (prefers-color-scheme: dark) {
+    :root { color-scheme: dark; color: #e5f1e7; background: #142520; }
+    .target { background: #1c302a; border-color: #455d52; }
+    .meta, .generated-at { color: #bdcbc1; }
+    th, td { border-color: #455d52; }
+    .error { color: #ffbda5; }
+  }
 </style>
 </head>
 <body>
-<h1>baktime — backup status</h1>
+<div class="brand">baktime<b>.</b></div>
+<h1>Backup status</h1>
 <p class="generated-at">Generated ${escapeHtml(generatedAt.toISOString())}</p>
 ${statuses.length > 0 ? statuses.map(renderTargetCard).join("\n") : "<p>No targets configured.</p>"}
 </body>

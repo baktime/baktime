@@ -1,16 +1,14 @@
-![baktime — backups that keep their time](assets/baktime-banner.png)
+[![baktime · GitHub Actions × restic](assets/baktime-banner.png)](https://baktime.github.io/)
 
-> **Scheduled, encrypted, deduplicated backups of your servers, databases and files — run by GitHub Actions, with no backup server to maintain.**
+# Simple backups, run by GitHub Actions
 
-Explore the [baktime project homepage](https://baktime.github.io/) for an overview of how it works and what you get. If the project is useful, [say thanks on Suppi](https://suppi.pl/mleczakm).
+Schedule encrypted backups of PostgreSQL, MySQL and Linux files from a private GitHub repository. Choose what to copy and when. GitHub Actions runs the jobs, and restic sends only new data blocks to storage you control. Get backup reports in Discord or use GitHub’s email notifications for workflows you trigger.
 
-baktime is a GitHub template repository. You create your own **private**
-copy of it, add each thing you want backed up as a GitHub secret, and from
-then on GitHub Actions backs it up on its schedule into a
-[restic](https://restic.net/) repository — Cloudflare R2 by default, or any
-S3-compatible or restic-supported storage.
+[Create your repository from the template](https://github.com/baktime/baktime/generate) · [English setup guide](https://baktime.github.io/?lang=en#start) · [Instrukcja po polsku](https://baktime.github.io/pl/#start)
 
-It backs up:
+The template is free. Running costs depend on your private repository’s Actions minutes, storage and Cloudflare usage. [See how the free allowances apply](https://baktime.github.io/#cost).
+
+## What you can back up
 
 - **Files** on any Linux host reachable over SSH (Alpine or glibc, no root
   needed) — including transactionally consistent copies of live SQLite
@@ -75,9 +73,9 @@ See [`docs/architecture.md`](docs/architecture.md) for the full design.
 
 ## Getting started
 
-You need a GitHub account, a Cloudflare account (for R2 storage and the
-Worker) and SSH access to what you want to back up. Follow
-[`docs/getting-started.md`](docs/getting-started.md).
+Create a private repository, connect an R2 bucket and add your first target as a repository secret. For example, a secret named `BAKTIME_TARGET_SHOP` can schedule a PostgreSQL database for 02:00 UTC each day. Run **Actions → Backup → Run workflow**, then check `history/shop.yml` for the snapshot ID.
+
+The [setup guide](docs/getting-started.md) covers the scheduler, credentials and first run. The [English](https://baktime.github.io/?lang=en#start) and [Polish](https://baktime.github.io/pl/#start) walkthroughs include complete database and file target examples.
 
 ## Documentation
 
@@ -90,3 +88,5 @@ Worker) and SSH access to what you want to back up. Follow
 
 ---
 *Inspired by [upptime](https://github.com/upptime/upptime)'s "the GitHub repo is the whole app" approach; backups by [restic](https://restic.net/).*
+
+[Support the project on Suppi](https://suppi.pl/mleczakm)
