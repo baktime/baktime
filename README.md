@@ -89,4 +89,4 @@ The [setup guide](docs/getting-started.md) covers the scheduler, credentials and
 ---
 *Inspired by [upptime](https://github.com/upptime/upptime)'s "the GitHub repo is the whole app" approach; backups by [restic](https://restic.net/).*
 
-[Support the project on Suppi](https://suppi.pl/mleczakm)
+[Say thanks on Suppi](https://suppi.pl/mleczakm)
