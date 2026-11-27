@@ -2,7 +2,7 @@
 
 # Simple backups, run by GitHub Actions
 
-Schedule encrypted backups of PostgreSQL, MySQL and Linux files from a private GitHub repository. Choose what to copy and when. GitHub Actions runs the jobs, and restic sends only new data blocks to storage you control. Get backup reports in Discord or use GitHub’s email notifications for workflows you trigger.
+Schedule encrypted backups of PostgreSQL, MySQL and Linux files from a private GitHub repository. Choose what to copy and when. GitHub Actions runs the jobs, and restic sends only new data blocks to storage you control. Get backup reports in Discord, Slack, Telegram or your own webhook, or use GitHub’s email notifications for workflows you trigger.
 
 [Create your repository from the template](https://github.com/baktime/baktime/generate) · [English setup guide](https://baktime.github.io/?lang=en#start) · [Instrukcja po polsku](https://baktime.github.io/pl/#start)
 
